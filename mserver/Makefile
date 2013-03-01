@@ -13,4 +13,4 @@ all: $(OBJS)
 
 clean:
 	@rm -rf $(OBJS)
-	@rm -rf $(OUT)
+	@rm -rf $(MSERVER)

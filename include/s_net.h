@@ -67,4 +67,10 @@ s_net_send(struct s_conn * conn, struct s_packet * pkt);
 void
 s_net_close(struct s_conn * conn);
 
+const char *
+s_net_ip(struct s_conn * conn);
+
+int
+s_net_port(struct s_conn * conn);
+
 #endif

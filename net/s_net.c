@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #define DEFAULT_PACKET_PENDING	32
 struct packet_node {
@@ -144,6 +145,8 @@ struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback)
 
 		// epoll add
 		iadd_fd(net, net->lfd, NULL);
+
+		s_log("listen at:%d", net->listen_port);
 	}
 
 	s_list_init(&net->conn_list);
@@ -200,6 +203,8 @@ int s_net_poll(struct s_net * net, int msec)
 				if(net->callback) {
 					net->callback(conn, pkt);
 				}
+				s_packet_put(pkt);
+
 				pkt = inext_packet(net, conn);
 			}
 			continue;
@@ -267,15 +272,19 @@ struct s_conn * s_net_connect(struct s_net * net, const char * ip, int port)
 	};
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if(connect(fd, (struct sockaddr *)&addr, len) < 0) {
-		s_log("connect failed!");
 		perror("connect");
+		s_log("connect failed!");
 		return NULL;
 	}
 
 	s_log("connect ok!");
+
+	// set nonblock
+	int flags = fcntl(fd, F_GETFL, 0);
+	fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
 	struct s_conn * conn = iget_conn(net);
 	if(!conn) {
@@ -289,7 +298,19 @@ struct s_conn * s_net_connect(struct s_net * net, const char * ip, int port)
 	memcpy(conn->ip, ip, strlen(ip) + 1);
 	conn->port = port;
 
+	iadd_conn(net, conn);
+
 	return conn;
+}
+
+const char * s_net_ip(struct s_conn * conn)
+{
+	return conn->ip;
+}
+
+int s_net_port(struct s_conn * conn)
+{
+	return conn->port;
 }
 
 static int iadd_fd(struct s_net * net, int fd, void * data)
@@ -328,6 +349,16 @@ static int irm_conn(struct s_net * net, struct s_conn * conn)
 
 	s_list_del(&conn->link);
 	s_list_insert(&net->conn_list, &conn->link);
+
+	// remove packets
+	while(1) {
+		struct packet_node * pn = s_queue_peek(conn->write_queue);
+		if(!pn) {
+			break;
+		}
+		s_packet_put(pn->pkt);
+		s_queue_pop(conn->write_queue);
+	}
 }
 
 static struct s_conn * iget_conn(struct s_net * net)
@@ -402,6 +433,7 @@ static int iread_conn(struct s_net * net, struct s_conn * conn)
 			return -1;
 		}
 		memcpy(conn->read_buf, old, conn->read_buf_p);
+		s_free(old);
 	}
 	while(1) {
 		int nread;
@@ -432,7 +464,7 @@ out:
 
 static struct s_packet * inext_packet(struct s_net * net, struct s_conn * conn)
 {
-	struct s_packet * pkt = s_packet_create_from(&conn->read_buf[conn->read_buf_curr], conn->read_buf_p);
+	struct s_packet * pkt = s_packet_create_from(&conn->read_buf[conn->read_buf_curr], conn->read_buf_p - conn->read_buf_curr);
 	if(!pkt) {
 		if(conn->read_buf_curr > 0) {
 			int sz = conn->read_buf_p - conn->read_buf_curr;
@@ -483,7 +515,7 @@ again:
 		pn->curr += nsend;
 		if(pn->curr >= pn->total) {
 			// send a packet completely
-			asset(pn->curr == pn->total);
+			assert(pn->curr == pn->total);
 			s_packet_put(pn->pkt);
 			s_queue_pop(conn->write_queue);
 		}

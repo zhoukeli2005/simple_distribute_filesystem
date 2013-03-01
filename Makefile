@@ -29,11 +29,13 @@ all:
 	make -C ./net
 	ar -r $(LIB) $(OBJS)
 	make -C ./mserver
+	make -C ./client
 
 clean:
 	make -C ./common clean
 	make -C ./thread clean
 	make -C ./net clean
 	make -C ./mserver clean
+	make -C ./client clean
 	@rm -rf $(OBJS)
 	@rm -rf $(LIB)

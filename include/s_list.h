@@ -40,6 +40,8 @@ static inline void s_list_del(struct s_list * s)
 
 #define s_list_first(head)	((head)->next)
 
+#define s_list_empty(head)	((head)->next == (head))
+
 #define s_list_foreach(p, head)	\
 	for((p) = (head)->next; (p) != (head); (p) = (p)->next) 
 
