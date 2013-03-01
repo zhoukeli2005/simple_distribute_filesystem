@@ -1,0 +1,16 @@
+# inherit CC CFLAGS LFLAGS AR NETLIB LIBPATH from parent Makefile
+
+OUTPATH = ../$(LIBPATH)
+
+CFLAGS += -I../include/
+
+OBJS = s_queue.o
+
+.PHONY: all clean
+
+all: $(OBJS)
+	@mv $(OBJS) $(OUTPATH)
+	
+
+clean:
+	@rm -rf $(OBJS)
