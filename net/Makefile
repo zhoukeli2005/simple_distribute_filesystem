@@ -1,18 +1,15 @@
 # inherit CC CFLAGS LFLAGS AR NETLIB from parent Makefile
 
-OUT = $(NETLIB)
+OUTPATH = ../$(LIBPATH)
 
 CFLAGS += -I../include/
 
 OBJS = s_net.o
 
-.PHONY: all clean $(OUT)
+.PHONY: all clean
 
-all: $(OUT)
-
-$(OUT): $(OBJS)
-	  $(AR) -r $(OUT) $(OBJS)
+all: $(OBJS)
+	  @mv $(OBJS) $(OUTPATH)
 
 clean:
 	@rm -rf $(OBJS)
-	@rm -rf $(OUT)

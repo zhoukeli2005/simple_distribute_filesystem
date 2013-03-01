@@ -7,21 +7,33 @@ AR = ar
 THREADLIB = thread.a
 NETLIB = net.a
 
+LIBPATH = lib/
+
+OBJS = $(LIBPATH)*.o
+LIB = $(LIBPATH)s_lib.a
+
+# exec
+MSERVER = s_mserver
+DSERVER = s_dserver
+CLIENT = s_client
+
 .PHONY : all clean
 
 export CC CFLAGS LFLAGS AR
-export THREADLIB NETLIB
+export LIBPATH LIB
+export MSERVER DSERVER CLIENT
 
 all:
+	make -C ./common
 	make -C ./thread
-#	make -C ./net $(MAKE_PARAM)
-#	make -C ./client $(MAKE_PARAM)
-#	make -C ./mserver $(MAKE_PARAM)
-#	make -C ./dserver $(MAKE_PARAM)
+	make -C ./net
+	ar -r $(LIB) $(OBJS)
+	make -C ./mserver
 
 clean:
+	make -C ./common clean
 	make -C ./thread clean
-#	make -C ./net clean
-#	make -C ./client clean
-#	make -C ./mserver clean
-#	make -C ./dserver clean
+	make -C ./net clean
+	make -C ./mserver clean
+	@rm -rf $(OBJS)
+	@rm -rf $(LIB)

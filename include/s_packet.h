@@ -6,6 +6,31 @@ struct s_packet;
 struct s_packet *
 s_packet_create(int size);
 
+struct s_packet *
+s_packet_create_from(char * p, int len);
+
+
+/*
+ *	Increase Reference Count
+ *
+ */
+void
+s_packet_get(struct s_packet * pkt);
+
+
+/*
+ *	Decrease Reference Count
+ *
+ */
+void
+s_packet_put(struct s_packet * pkt);
+
+int
+s_packet_size(struct s_packet * pkt);
+
+char *
+s_packet_data_p(struct s_packet * pkt);
+
 int
 s_packet_read_char(struct s_packet * pkt, char * c);
 
