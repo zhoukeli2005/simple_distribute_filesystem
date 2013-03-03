@@ -4,7 +4,7 @@ OUTPATH = ../$(LIBPATH)
 
 CFLAGS += -I../include/
 
-OBJS = s_queue.o
+OBJS = s_queue.o s_string.o s_array.o s_config.o
 
 .PHONY: all clean
 
