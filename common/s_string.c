@@ -1,6 +1,9 @@
 #include <s_common.h>
 #include <s_string.h>
 #include <s_mem.h>
+#include <s_num_str.h>
+
+#include <stdarg.h>
 
 struct s_string {
 	unsigned int hash;
@@ -45,6 +48,71 @@ struct s_string * s_string_create_len(const char * p, unsigned int len)
 	return str;
 }
 
+struct s_string * s_string_create_format(const char * format, ...)
+{
+	static char buf[S_STR_FORMAT_LIMIT];
+	int pos = 0;
+
+	va_list va;
+	va_start(va, format);
+
+	char c;
+	const char * p;
+
+	while((c = *format++)) {
+		if(c == '%') {
+			char next = *format++;
+			switch(next) {
+				case '%':
+					buf[pos++] = '%';
+					break;
+
+				case 'd':
+					{
+						int i = va_arg(va, int);
+						p = s_int_to_string(i);
+
+						goto label_process_string;
+					}
+					break;
+
+				case 's':
+					{
+						p = va_arg(va, char *);
+						int len;
+label_process_string:
+						len = strlen(p);
+						if(pos + len >= S_STR_FORMAT_LIMIT) {
+							s_log("string format too long!");
+							return NULL;
+						}
+						memcpy(&buf[pos], p, len);
+						pos += len;
+					}
+					break;
+
+				default:
+					s_log("string format error! unsupported :[%c]", c);
+					return NULL;
+			}
+
+		} else {
+			buf[pos++] = c;
+		}
+
+		if(pos >= S_STR_FORMAT_LIMIT) {
+			break;
+		}
+	}
+
+	if(c != 0 && !*format) {
+		s_log("string format too long!");
+		return NULL;
+	}
+	
+	return s_string_create_len(buf, pos);
+}
+
 int s_string_equal(struct s_string * a, struct s_string * b)
 {
 	if(a == b) {
@@ -62,17 +130,22 @@ const char * s_string_data_p(struct s_string * str)
 	return gets(str);
 }
 
+int s_string_len(struct s_string * str)
+{
+	return str->len;
+}
+
 int s_string_get_hash(struct s_string * str)
 {
 	return str->hash;
 }
 
-void s_string_get(struct s_string * str)
+void s_string_grab(struct s_string * str)
 {
 	str->ref_count++;
 }
 
-void s_string_put(struct s_string * str)
+void s_string_drop(struct s_string * str)
 {
 	str->ref_count--;
 	if(str->ref_count == 0) {

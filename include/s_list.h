@@ -49,6 +49,7 @@ static inline void s_list_del(struct s_list * s)
 	for((p) = (head)->next, (tmp) = (p)->next; (p) != (head); (p) = (tmp), (tmp) = (tmp)->next)
 
 #define s_list_entry(p, t, e)	s_container_of(p, t, e)
+#define s_list_first_entry(head, t, e) s_list_entry(s_list_first(head), t, e)
 
 #endif
 

@@ -1,54 +1,61 @@
-#include <s_common.h>
-#include <s_net.h>
-#include <s_thread.h>
-#include <s_packet.h>
-#include <s_config.h>
+#include "s_server.h"
+#include "s_check_conn.h"
 
-static void do_conn_event(struct s_conn * conn, struct s_packet * pkt);
+#include <signal.h>
 
 int main(int argc, char * argv[])
 {
+	/* 1 -- ingore signals : SIGPIPE -- */
+	struct sigaction act = {
+		.sa_handler = SIG_IGN,
+		.sa_flags = 0
+	};
+	sigemptyset(&act.sa_mask);
+
+	if(sigaction(SIGPIPE, &act, NULL) < 0) {
+		s_log("ignore SIGPIPE error!");
+		perror("SIGPIPE");
+		return 0;
+	}
+
+	/* 2 -- create main data-structure : s_mserver -- */
+
+	struct s_mserver * mserv = s_mserver_create(argc, argv);
+
+	if(!mserv) {
+		s_log("mserv create error!");
+		return 0;
+	}
+
+	s_log("mserv create ok, id:%d", mserv->id);
+
+	/* 3 -- read config.conf and init s_mserver -- */
 	struct s_config * config = s_config_create("config.conf");
 	if(!config) {
 		s_log("open config error!");
 		return 0;
 	}
-	s_config_iter_begin(config);
-	struct s_string * region_name = s_config_iter_next(config);
-	while(region_name) {
-		s_log("region:%s", s_string_data_p(region_name));
-		region_name = s_config_iter_next(config);
+
+	if(s_mserver_init_config(mserv, config) < 0) {
+		s_log("init config error!");
+		return 0;
 	}
-		
 
-	struct s_net * net = s_net_create(2046, &do_conn_event);
-
+	/* 4 -- do main process -- */
 	while(1) {
-		if(s_net_poll(net, 10) < 0) {
+		/* 1. check net events */
+		if(s_net_poll(mserv->net, 10) < 0) {
 			s_log("poll error!");
 			break;
 		}
+
+		/* 2. check connections */
+		if(s_check_conn(mserv) < 0) {
+			s_log("check conn error!");
+			break;
+		}
+
 	}
 	return 0;
-}
-
-static void do_conn_event(struct s_conn * conn, struct s_packet * pkt)
-{
-	if(pkt == S_NET_CONN_CLOSED) {
-		s_log("a connection is closed(%s:%d)", s_net_ip(conn), s_net_port(conn));
-		return;
-	}
-
-	if(pkt == S_NET_CONN_ACCEPT) {
-		s_log("a connection comes(%s:%d)", s_net_ip(conn), s_net_port(conn));
-		return;
-	}
-
-	if(pkt == S_NET_CONN_CLOSING) {
-		s_log("a connection closing(%s:%d)", s_net_ip(conn), s_net_port(conn));
-		return;
-	}
-
-	s_log("receive a packet, size:%d", s_packet_size(pkt));
 }
 

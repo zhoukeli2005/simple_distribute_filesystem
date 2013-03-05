@@ -17,6 +17,11 @@ s_config_select_region(struct s_config * c, struct s_string * name);
 int
 s_config_read_int(struct s_config * c, struct s_string * key);
 
+
+/*
+ *
+ *	@return : weak reference, dont put!
+ */
 struct s_string *
 s_config_read_string(struct s_config * c, struct s_string * key);
 

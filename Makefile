@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g
+CFLAGS = -g -DS_DEBUG -Wall
 LFLAGS =
 AR = ar
 
@@ -31,7 +31,7 @@ all:
 	make -C ./fs
 	ar -r $(LIB) $(OBJS)
 	make -C ./mserver
-	make -C ./client
+#	make -C ./client
 
 clean:
 	make -C ./common clean

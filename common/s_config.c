@@ -136,7 +136,7 @@ label_next_line:
 			error();
 		}
 		region->key = key;
-		s_string_get(key);
+		s_string_grab(key);
 
 		region->elems = s_array_create(sizeof(struct config_elem), 16);
 		if(!region->elems) {
@@ -170,8 +170,8 @@ label_next_line:
 	elem->sval = val;
 	elem->flags = DONTKNOWN;
 
-	s_string_get(key);
-	s_string_get(val);
+	s_string_grab(key);
+	s_string_grab(val);
 
 	next_line();
 
@@ -183,10 +183,10 @@ label_error:
 
 label_eof:
 	if(key) {
-		s_string_put(key);
+		s_string_drop(key);
 	}
 	if(val) {
-		s_string_put(val);
+		s_string_drop(val);
 	}
 	if(fr) {
 		s_file_reader_destroy(fr);
@@ -200,19 +200,19 @@ void s_config_destroy(struct s_config * config)
 	int i;
 	for(i = 0; i < s_array_len(config->regions); ++i) {
 		struct config_region * region = s_array_at(config->regions, i);
-		s_string_put(region->key);
+		s_string_drop(region->key);
 		int k;
 		for(k = 0; k < s_array_len(region->elems); ++k) {
 			struct config_elem * elem = s_array_at(region->elems, k);
-			s_string_put(elem->key);
+			s_string_drop(elem->key);
 			if(elem->flags != INT_VALUE) {
-				s_string_put(elem->sval);
+				s_string_drop(elem->sval);
 			}
 		}
-		s_array_put(region->elems);
+		s_array_drop(region->elems);
 	}
 
-	s_array_put(config->regions);
+	s_array_drop(config->regions);
 }
 
 int s_config_select_region(struct s_config * config, struct s_string * name)

@@ -8,6 +8,8 @@
 
 #include <sys/epoll.h>
 #include <sys/types.h>
+// for accept4
+#define __USE_GNU
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -46,6 +48,9 @@ struct s_conn {
 
 	// list for create/destroy
 	struct s_list link;
+
+	// udata
+	void * udata;
 };
 
 struct s_net {
@@ -68,6 +73,9 @@ struct s_net {
 
 	// callback
 	S_NET_CALLBACK callback;
+
+	// udata
+	void * udata;
 }g_net;
 
 /* -- add/rm fd to epoll -- */
@@ -85,7 +93,7 @@ static void iput_conn(struct s_net * net, struct s_conn * conn);
 /* -- close a connection from other end -- */
 #define iclose_conn_positive(net, conn)	\
 	if(net->callback) {	\
-		net->callback(conn, S_NET_CONN_CLOSED);	\
+		net->callback(conn, S_NET_CONN_CLOSED, net->udata);	\
 	}	\
 	irm_conn(net, conn);	\
 	iput_conn(net, conn);
@@ -98,7 +106,7 @@ static struct s_packet * inext_packet(struct s_net * net, struct s_conn * conn);
 /* -- accept new connections -- */
 static void ilisten_accept(struct s_net * net);
 
-struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback)
+struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback, void * udata)
 {
 	struct s_net * net = &g_net;
 	if((net->efd = epoll_create(1)) < 0) {
@@ -158,6 +166,7 @@ struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback)
 	net->events_sz = DEFAULT_EPOLL_EVENTS_SZ;
 
 	net->callback = callback;
+	net->udata = udata;
 
 	return net;
 }
@@ -192,7 +201,6 @@ int s_net_poll(struct s_net * net, int msec)
 		struct s_conn * conn = (struct s_conn *)event->data.ptr;
 		if(event->events & EPOLLIN) {
 			// new data comes...
-			s_log("new data from - %s:%d", conn->ip, conn->port);
 			if(iread_conn(net, conn) < 0) {
 				s_log("iread_conn(...) < 0. close conn!");
 				iclose_conn_positive(net, conn);
@@ -201,9 +209,9 @@ int s_net_poll(struct s_net * net, int msec)
 			struct s_packet * pkt = inext_packet(net, conn);
 			while(pkt) {
 				if(net->callback) {
-					net->callback(conn, pkt);
+					net->callback(conn, pkt, net->udata);
 				}
-				s_packet_put(pkt);
+				s_packet_drop(pkt);
 
 				pkt = inext_packet(net, conn);
 			}
@@ -212,7 +220,6 @@ int s_net_poll(struct s_net * net, int msec)
 
 		if(event->events & EPOLLOUT) {
 			// can send ...
-			s_log("can send to - %s:%d", conn->ip, conn->port);
 			if(iwrite_conn(net, conn) < 0) {
 				s_log("iwrite_conn(...) < 0. close conn!");
 
@@ -238,7 +245,7 @@ void s_net_send(struct s_conn * conn, struct s_packet * pkt)
 		return;
 	}
 
-	s_packet_get(pkt);
+	s_packet_grab(pkt);
 	pn->pkt = pkt;
 	pn->p = s_packet_data_p(pkt);
 	pn->total = s_packet_size(pkt);
@@ -254,7 +261,7 @@ void s_net_close(struct s_conn * conn)
 {
 	struct s_net * net = conn->net;
 	if(net->callback) {
-		net->callback(conn, S_NET_CONN_CLOSING);
+		net->callback(conn, S_NET_CONN_CLOSING, net->udata);
 	}
 
 	irm_conn(net, conn);
@@ -313,6 +320,16 @@ int s_net_port(struct s_conn * conn)
 	return conn->port;
 }
 
+void s_net_set_udata(struct s_conn * conn, void * d)
+{
+	conn->udata = d;
+}
+
+void * s_net_get_udata(struct s_conn * conn)
+{
+	return conn->udata;
+}
+
 static int iadd_fd(struct s_net * net, int fd, void * data)
 {
 	struct epoll_event event = {
@@ -356,9 +373,10 @@ static int irm_conn(struct s_net * net, struct s_conn * conn)
 		if(!pn) {
 			break;
 		}
-		s_packet_put(pn->pkt);
+		s_packet_drop(pn->pkt);
 		s_queue_pop(conn->write_queue);
 	}
+	return 0;
 }
 
 static struct s_conn * iget_conn(struct s_net * net)
@@ -426,7 +444,7 @@ static int iread_conn(struct s_net * net, struct s_conn * conn)
 	}
 	if(conn->read_buf_sz - conn->read_buf_p < ndata) {
 		char * old = conn->read_buf;
-		conn->read_buf_sz = s_roundup(ndata * 2, 1024);
+		conn->read_buf_sz = s_roundup(ndata * 2 + 1, 1024);
 		conn->read_buf = s_malloc(char, conn->read_buf_sz);
 		if(!conn->read_buf) {
 			s_log("no mem!");
@@ -516,7 +534,7 @@ again:
 		if(pn->curr >= pn->total) {
 			// send a packet completely
 			assert(pn->curr == pn->total);
-			s_packet_put(pn->pkt);
+			s_packet_drop(pn->pkt);
 			s_queue_pop(conn->write_queue);
 		}
 	}
@@ -564,7 +582,7 @@ again:
 		iadd_conn(net, conn);
 
 		if(net->callback) {
-			net->callback(conn, S_NET_CONN_ACCEPT);
+			net->callback(conn, S_NET_CONN_ACCEPT, net->udata);
 		}
 	}
 out:

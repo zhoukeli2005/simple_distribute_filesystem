@@ -41,12 +41,30 @@ int s_array_len(struct s_array * array)
 	return array->nelem;
 }
 
+static int expand(struct s_array * array, int sz)
+{
+	if(array->total >= sz) {
+		return 0;
+	}
+	char * old = array->p;
+	array->p = s_malloc(char, sz * array->elem_size);
+	if(!array->p) {
+		s_log("no mem for array expand(curr size:%d/%d, to :%d)", array->nelem, array->total, sz);
+		return -1;
+	}
+	memcpy(array->p, old, array->nelem * array->elem_size);
+	s_free(old);
+	array->total = sz;
+	return 0;
+}
+
 void *
 s_array_push(struct s_array * array) 
 {
 	if(array->nelem >= array->total) {
 		// expand
 		int sz = array->total * 2;
+		/*
 		char * old = array->p;
 		array->p = s_malloc(char, sz * array->elem_size);
 		if(!array->p) {
@@ -55,7 +73,10 @@ s_array_push(struct s_array * array)
 		}
 		memcpy(array->p, old, array->nelem * array->elem_size);
 		s_free(old);
-		array->total = sz;
+		array->total = sz;*/
+		if(expand(array, sz) < 0) {
+			return NULL;
+		}
 	}
 	array->nelem++;
 	return iat(array->p, array->elem_size, array->nelem-1);
@@ -90,12 +111,12 @@ s_array_rm(struct s_array * array, int index)
 	array->nelem--;
 }
 
-void s_array_get(struct s_array * array)
+void s_array_grab(struct s_array * array)
 {
 	array->ref_count++;
 }
 
-void s_array_put(struct s_array * array)
+void s_array_drop(struct s_array * array)
 {
 	array->ref_count--;
 	if(array->ref_count == 0) {

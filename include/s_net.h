@@ -9,7 +9,7 @@ struct s_packet;
 #define S_NET_CONN_CLOSED		(struct s_packet *)(1)
 #define S_NET_CONN_CLOSING		(struct s_packet *)(2)
 
-typedef void(*S_NET_CALLBACK)(struct s_conn * conn, struct s_packet * pkt);
+typedef void(*S_NET_CALLBACK)(struct s_conn * conn, struct s_packet * pkt, void * udata);
 
 /*
  *	create a net manager
@@ -18,19 +18,19 @@ typedef void(*S_NET_CALLBACK)(struct s_conn * conn, struct s_packet * pkt);
  *				waiting for connection coming
  *	@param callback:
  *			1. when a new connection comes, if will call :
- *				callback(conn, S_NET_CONN_ACCEPT)
+ *				callback(conn, S_NET_CONN_ACCEPT, udata)
  *
  *			2. when a new packet comes, if will call :
- *				 callback(conn, pkt)
+ *				 callback(conn, pkt, udata)
  *
  *			3. when a connection is closed by the other end, if will call :
- *				callback(conn, S_NET_CONN_CLOSED)
+ *				callback(conn, S_NET_CONN_CLOSED, udata)
  *
  *			4. when a connection is closed by called s_net_close(...), if will call : 
- *				callback(conn, S_NET_CONN_CLOSING)
+ *				callback(conn, S_NET_CONN_CLOSING, udata)
  */
 struct s_net *
-s_net_create(int listen_port, S_NET_CALLBACK callback);
+s_net_create(int listen_port, S_NET_CALLBACK callback, void * udata);
 
 
 /*
@@ -72,5 +72,11 @@ s_net_ip(struct s_conn * conn);
 
 int
 s_net_port(struct s_conn * conn);
+
+void
+s_net_set_udata(struct s_conn * conn, void * d);
+
+void *
+s_net_get_udata(struct s_conn * conn);
 
 #endif

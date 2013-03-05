@@ -19,10 +19,11 @@ void
 s_array_rm(struct s_array * array, int index);
 
 void
-s_array_get(struct s_array * array);
+s_array_grab(struct s_array * array);
 
 void
-s_array_put(struct s_array * array);
+s_array_drop(struct s_array * array);
+
 
 #endif
 

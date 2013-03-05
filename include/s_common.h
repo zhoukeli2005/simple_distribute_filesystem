@@ -11,7 +11,11 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-/* -- */
+/* - bit - */
+#define S_SETBIT(f, b)		f |= (b)
+#define S_CLEARBIT(f, b)	f &= ~(b)
+
+/* - util - */
 #define MAX_THREAD	256
 
 #define s_offsetof(t, e)	(size_t)(&((t*)0)->e)
@@ -23,7 +27,11 @@
 #define s_min(x, y)	((x) < (y) ? (x) : (y))
 
 /* - log - */
+#ifdef S_DEBUG_LOG
 #define s_log(format, ...)	printf("(%s:%d:%s) "format"\n", __FILE__, __LINE__, __FUNCTION__,  ##__VA_ARGS__)
+#else
+#define s_log(format, ...)	printf(format"\n",  ##__VA_ARGS__)
+#endif
 
 #endif
 
