@@ -29,6 +29,7 @@ all:
 	make -C ./thread
 	make -C ./net
 	make -C ./fs
+	make -C ./serv_group
 	ar -r $(LIB) $(OBJS)
 	make -C ./mserver
 #	make -C ./client
@@ -38,6 +39,7 @@ clean:
 	make -C ./thread clean
 	make -C ./net clean
 	make -C ./fs clean
+	make -C ./serv_group clean
 	make -C ./mserver clean
 	make -C ./client clean
 	@rm -rf $(OBJS)

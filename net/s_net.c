@@ -126,11 +126,20 @@ struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback, void * uda
 			return NULL;
 		}
 
+		// set reusable
+		int flag = 1;
+		if(setsockopt(net->lfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
+			s_log("net->lfd set reusable error!");
+			perror("set reusable");
+			return NULL;
+		}
+
 		struct sockaddr_in addr = {
 			.sin_family = AF_INET,
 			.sin_port = htons(listen_port),
 			.sin_addr.s_addr = INADDR_ANY
 		};
+
 		if(bind(net->lfd, (struct sockaddr *)&addr, (socklen_t)(sizeof(struct sockaddr_in))) < 0) {
 			s_log("net->lfd bind error!");
 			perror("bind net->lfd");
@@ -140,14 +149,6 @@ struct s_net * s_net_create(int listen_port, S_NET_CALLBACK callback, void * uda
 		if(listen(net->lfd, 128) < 0) {
 			s_log("net->lfd listen error!");
 			perror("listen net->lfd");
-			return NULL;
-		}
-
-		// set reusable
-		int flag = 1;
-		if(setsockopt(net->lfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
-			s_log("net->lfd set reusable error!");
-			perror("set reusable");
 			return NULL;
 		}
 
@@ -395,9 +396,17 @@ static struct s_conn * iget_conn(struct s_net * net)
 		}
 		net->nconn++;
 	}
-	s_list_init(&conn->link);
-	conn->net = net;
 
+	conn->net = net;
+	conn->fd = -1;
+	conn->ip[0] = 0;
+	conn->port = 0;
+	conn->udata = NULL;
+
+	s_list_init(&conn->link);
+
+
+	// reuse write_queue
 	if(!conn->write_queue) {
 		conn->write_queue = s_queue_create(sizeof(struct packet_node), DEFAULT_PACKET_PENDING);
 		if(!conn->write_queue) {
@@ -407,6 +416,7 @@ static struct s_conn * iget_conn(struct s_net * net)
 	}
 	s_queue_clear(conn->write_queue);
 
+	// reuse read_buf
 	if(!conn->read_buf) {
 		conn->read_buf = s_malloc(char, DEFAULT_READ_BUFFER_SZ);
 		conn->read_buf_sz = DEFAULT_READ_BUFFER_SZ;
@@ -417,9 +427,6 @@ static struct s_conn * iget_conn(struct s_net * net)
 	}
 	conn->read_buf_p = 0;
 	conn->read_buf_curr = 0;
-
-	conn->ip[0] = 0;
-	conn->port = -1;
 
 	return conn;
 }

@@ -25,11 +25,24 @@ s_config_read_int(struct s_config * c, struct s_string * key);
 struct s_string *
 s_config_read_string(struct s_config * c, struct s_string * key);
 
-#define s_config_select(c, n)	({struct s_string * __n = s_string_create(n); int __r = s_config_select_region(c, __n); __r;})
-#define s_config_read_i(c, k)	({struct s_string * __k = s_string_create(k); int __r = s_config_read_int(c, __k); __r;})
+
+
+#define s_config_select(c, n)	({	\
+		struct s_string * __n = s_string_create(n);	\
+		int __r = s_config_select_region(c, __n);	\
+		s_string_drop(__n);	\
+		__r;})
+
+#define s_config_read_i(c, k)	({	\
+		struct s_string * __k = s_string_create(k);	\
+		int __r = s_config_read_int(c, __k);	\
+		s_string_drop(__k);	\
+		__r;})
+
 #define s_config_read_s(c, k)	({	\
 		struct s_string * __k = s_string_create(k); 	\
 		struct s_string * __r = s_config_read_string(c, __k);	\
+		s_string_drop(__k);	\
 		__r;})
 
 /*

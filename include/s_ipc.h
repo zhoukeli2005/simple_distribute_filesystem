@@ -12,7 +12,7 @@ enum S_ENUM_PKT_TYPE {
 	S_PKT_TYPE
 };
 
-#define s_ipc_pkt_identify(p, id, type, pwd)	\
+#define s_ipc_pkt_identify(p, type, id, pwd)	\
 	do {	\
 		p = s_packet_create(16);	\
 		s_packet_write_int(p, S_PKT_TYPE_IDENTIFY);	\

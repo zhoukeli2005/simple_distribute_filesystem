@@ -9,14 +9,17 @@
 #include <errno.h>
 
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <unistd.h>
+
+#define MAX_THREAD	256
 
 /* - bit - */
 #define S_SETBIT(f, b)		f |= (b)
 #define S_CLEARBIT(f, b)	f &= ~(b)
 
 /* - util - */
-#define MAX_THREAD	256
+#define s_used(x)	(void)(x)
 
 #define s_offsetof(t, e)	(size_t)(&((t*)0)->e)
 #define s_container_of(p, t, e)	(t*)((size_t)(p) - s_offsetof(t, e))

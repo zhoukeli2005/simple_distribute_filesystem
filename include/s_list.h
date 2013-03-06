@@ -8,6 +8,8 @@ struct s_list {
 	struct s_list * next;
 };
 
+#define S_LIST_DECLARE(name)	struct s_list name = {.prev = &name, .next = &name}
+
 static inline void s_list_init(struct s_list * s)
 {
 	s->prev = s->next = s;
