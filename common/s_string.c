@@ -135,7 +135,7 @@ int s_string_len(struct s_string * str)
 	return str->len;
 }
 
-int s_string_get_hash(struct s_string * str)
+unsigned int s_string_get_hash(struct s_string * str)
 {
 	return str->hash;
 }

@@ -49,8 +49,8 @@ s_string_data_p(struct s_string * str);
 int
 s_string_len(struct s_string * str);
 
-int
-s_stirng_get_hash(struct s_string * str);
+unsigned int
+s_string_get_hash(struct s_string * str);
 
 
 int
