@@ -9,11 +9,11 @@
 struct s_hash_node {
 	struct s_list link;
 	struct s_hash_key key;
-	char val[1];
+	// val follows
 };
 
-#define ival(n)	(&(n)->val)
-#define inext(n)	((struct s_hash_node *)((n)->link.next))
+#define ival(n)		(char*)((struct s_hash_node *)(n) + 1)
+#define inext(n)	(struct s_hash_node *)((n)->link.next)
 
 struct s_hash {
 	int elem_size;
@@ -26,8 +26,8 @@ struct s_hash {
 	struct s_list free_node;
 };
 
-#define inode_at(p, sz, n)	(struct s_hash_node *)(((char*)(p)) + (sz) * (n))
-#define ihash_at(h, n)	inode_at((h)->p, (h)->node_size, n)
+#define inode_at(p, sz, n)	(struct s_hash_node *)((char*)(p) + (sz) * (n))
+#define ihash_at(h, n)		inode_at((h)->p, (h)->node_size, n)
 
 static unsigned int iget_hash(struct s_hash_key * key)
 {
@@ -47,6 +47,9 @@ static unsigned int iget_hash(struct s_hash_key * key)
 			hash += h[i];
 		}
 		return hash;
+	}
+	if(key->tt != S_HASH_KEY_VOIDP) {
+		s_log("[Error] key tt:%d!", key->tt);
 	}
 	assert(key->tt == S_HASH_KEY_VOIDP);
 	union {
@@ -84,10 +87,15 @@ s_hash_create(int elem_size, int nelem_alloc)
 	hash->elem_size = elem_size;
 	hash->nelem_alloc = nelem_alloc;
 
-	hash->node_size = sizeof(struct s_hash_node) + elem_size - 1;
+	hash->node_size = sizeof(struct s_hash_node) + elem_size;
 
 	int sz = hash->node_size * nelem_alloc;
 	hash->p = s_malloc(char, sz);
+	if(!hash->p) {
+		s_log("[Error] no mem for s_hash.p!");
+		s_free(hash);
+		return NULL;
+	}
 
 	s_list_init(&hash->free_node);
 	
@@ -131,9 +139,14 @@ i_get_free_node(struct s_hash * hash)
 	}
 	for(i = 0; i < old_alloc; ++i) {
 		struct s_hash_node * old = inode_at(old_p, hash->node_size, i);
-		struct s_hash_node * node = s_hash_set(hash, &old->key);
-		memcpy(ival(node), ival(old), hash->elem_size);
+		if(old->key.tt != S_HASH_KEY_NULL) {
+			void * pval = s_hash_set(hash, &old->key);
+			memcpy(pval, ival(old), hash->elem_size);
+		} else {
+			s_log("[Warnning] s_hash.expand while has free slot!");
+		}
 	}
+	s_free(old_p);
 
 	return i_get_free_node(hash);
 }
@@ -141,7 +154,14 @@ i_get_free_node(struct s_hash * hash)
 void
 s_hash_destroy(struct s_hash * hash)
 {
-	// free str XXX
+	// free str
+	int i;
+	for(i = 0; i < hash->nelem_alloc; ++i) {
+		struct s_hash_node * node = ihash_at(hash, i);
+		if(node->key.tt == S_HASH_KEY_STR) {
+			s_string_drop(node->key.str);
+		}
+	}
 
 	s_free(hash->p);
 	s_free(hash);
@@ -149,6 +169,18 @@ s_hash_destroy(struct s_hash * hash)
 
 void * s_hash_set(struct s_hash * H, struct s_hash_key * key)
 {
+	// 0. if already has `key`
+	void * find_p = s_hash_get(H, key);
+	if(find_p) {
+		return find_p;
+	}
+
+	struct s_hash_node * free_node = i_get_free_node(H);
+	if(!free_node) {
+		s_log("[Error] no mem for s_hash_set!");
+		return NULL;
+	}
+
 	unsigned int hash = iget_hash(key);
 	unsigned int main_pos = hash % H->nelem_alloc;
 	struct s_hash_node * node = ihash_at(H, main_pos);
@@ -160,6 +192,9 @@ void * s_hash_set(struct s_hash * H, struct s_hash_key * key)
 
 	// 1. empty node
 	if(node->key.tt == S_HASH_KEY_NULL) {
+		// need not `free_node`
+		s_list_insert(&H->free_node, &free_node->link);
+
 		// remove from free list
 		s_list_del(&node->link);
 
@@ -173,10 +208,6 @@ void * s_hash_set(struct s_hash * H, struct s_hash_key * key)
 
 	// 2. at main position
 	if(main_pos == the_mp) {
-		struct s_hash_node * free_node = i_get_free_node(H);
-		if(!free_node) {
-			return NULL;
-		}
 		free_node->key = *key;
 		free_node->link.next = node->link.next;
 		node->link.next = (void*)free_node;
@@ -191,10 +222,6 @@ void * s_hash_set(struct s_hash * H, struct s_hash_key * key)
 
 	assert(inext(the_node) == node);
 
-	struct s_hash_node * free_node = i_get_free_node(H);
-	if(!free_node) {
-		return NULL;
-	}
 	memcpy((void*)free_node, (void*)node, H->node_size);
 	the_node->link.next = (void*)free_node;
 
@@ -270,3 +297,64 @@ void s_hash_del(struct s_hash * H, struct s_hash_key * key)
 	}
 }
 
+#if 1
+int main(int argc, char * argv[])
+{
+	struct A {
+		int i;
+		char str[64];
+	};
+
+	srand(time(NULL));
+
+	struct s_hash * hash = s_hash_create(sizeof(struct A), 0);
+	int i;
+	for(i = 0; i < 1600; ++i) {
+		int r = rand() % 1000;
+		if(r < 500) {
+			struct A * p = s_hash_set_num(hash, r);
+			p->i = i;
+			snprintf(p->str, 63, "%d", r);
+		} else {
+			struct s_string * str = s_string_create_format("%d", r);
+			struct A * p = s_hash_set_str(hash, str);
+			p->i = i;
+			memcpy(p->str, s_string_data_p(str), s_string_len(str) + 1);
+		}
+	}
+
+	s_log("node_size:%d, elem_size:%d, nalloc:%d", hash->node_size, hash->elem_size, hash->nelem_alloc);
+
+	struct A * p = s_hash_set_num(hash, 50.0);
+	p->i = 50;
+	memcpy(p->str, "heha", 5);
+
+	p = s_hash_get_num(hash, 50);
+	if(p) {
+		s_log("find, %d, %s", p->i, p->str);
+	} else {
+		s_log("!!not find!");
+	}
+
+	p = s_hash_get_num(hash, 50.001);
+	if(p) {
+		s_log("!!find %f, %d, %s", 50.001, p->i, p->str);
+	} else {
+		s_log("not found:50.001");
+	}
+
+	p = s_hash_set_str(hash, s_string_create("50"));
+	p->i = 50;
+	memcpy(p->str, "xxxx", 5);
+
+	p = s_hash_get_str(hash, s_string_create("50"));
+	if(p) {
+		s_log("find %d, %s", p->i, p->str);
+	} else {
+		s_log("!! not found!");
+	}
+
+	return 0;
+}
+
+#endif

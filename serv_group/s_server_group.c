@@ -18,6 +18,7 @@ struct s_server_group * s_servg_create(int type, int id, struct s_servg_callback
 		if(!servg->servs[i]) {
 			return NULL;
 		}
+		servg->min_delay_serv[i] = NULL;
 	}
 
 	s_list_init(&servg->list_wait_for_conn);
@@ -181,6 +182,32 @@ struct s_server * s_servg_get_serv(struct s_server_group * servg, int type, int 
 	return NULL;
 }
 
+struct s_array * s_servg_get_serv_array(struct s_server_group * servg, int type)
+{
+	if(type >= 0 && type < S_SERV_TYPE_MAX) {
+		return servg->servs[type];
+	}
+	s_log("[Error] get_serv_array:invalid param, type:%d", type);
+	return NULL;
+}
+
+struct s_server * s_servg_get_min_delay_server(struct s_server_group * servg, int type)
+{
+	struct s_server * serv = servg->min_delay_serv[type];
+	if(serv) {
+		return serv;
+	}
+	int i;
+	struct s_array * array = servg->servs[type];
+	for(i = 0; i < s_array_len(array); ++i) {
+		serv = s_array_at(array, i);
+		if(serv) {
+			return serv;
+		}
+	}
+	return NULL;
+}
+
 struct s_conn * s_servg_get_conn(struct s_server * serv)
 {
 	return serv->conn;
@@ -216,6 +243,11 @@ void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)
 	}
 
 	s_list_del(&serv->list);
+
+	if(servg->min_delay_serv[serv->type] == serv) {
+		// it is the low delay server, reset
+		servg->min_delay_serv[serv->type] = NULL;
+	}
 
 	if((serv->flags & S_SERV_FLAG_IN_CONFIG) == 0) {
 		// not in config.conf, just free

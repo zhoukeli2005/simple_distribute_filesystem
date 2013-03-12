@@ -71,6 +71,12 @@ s_servg_poll(struct s_server_group * servg, int msec);
 struct s_server *
 s_servg_get_serv(struct s_server_group * servg, int type, int id);
 
+struct s_array *
+s_servg_get_serv_array(struct s_server_group * servg, int type);
+
+struct s_server *
+s_servg_get_min_delay_serv(struct s_server_group * servg, int type);
+
 
 /*
  *	s_servg_get_conn

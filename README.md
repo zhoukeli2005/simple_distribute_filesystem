@@ -4,7 +4,12 @@
 	<3> s_packet	-- ref count				(ok)
 	<4> s_queue						(ok)
 	<5> s_list						(ok)
-	<6> s_hash(s_string/double/void * -> data block)	(4 hour)
+	<6> s_hash(s_string/double/void * -> data block)	(4 hour)	(ok)
+		debug record:
+		<<<1>>> 在一个笔误上debug了近2个小时！
+			s_hash_set(...)返回的是指向val的指针
+			我一直当成了指向struct s_hash_node的指针
+			这该怎么破！
 
 								(total 4 hour)
 
@@ -42,6 +47,9 @@
 				nsize,
 				void * p
 			}
+
+	<8.x> get_block_metadata( udata ) --> block meta-data						(4 hour)
+
 	<8> write_block( udata, callback ) --> none							(4 hour)
 		<<1>> udata --> {
 				buf,

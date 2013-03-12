@@ -148,16 +148,26 @@ static void ihandle_pong(struct s_server_group * servg, struct s_server * serv, 
 	s_packet_read(pkt, &usec, uint, label_read_error);
 
 	s_log("[LOG] handle pong, sec:%u, usec:%u", (unsigned int)sec, (unsigned int)usec);
-	struct timeval tv_now, tv_sub;
+	struct timeval tv_now;
 	gettimeofday(&tv_now, NULL);
 
 	struct timeval tv_sent = {
 		.tv_sec = sec,
 		.tv_usec = usec
 	};
-	timersub(&tv_now, &tv_sent, &tv_sub);
+	timersub(&tv_now, &tv_sent, &serv->tv_delay);
 
-	s_log("[LOG] round-time:%u %u", (unsigned int)tv_sub.tv_sec, (unsigned int)tv_sub.tv_usec);
+	struct s_server * min_delay_serv = servg->min_delay_serv[serv->type];
+	if(!min_delay_serv ||
+			(min_delay_serv != serv &&
+			 timercmp(&min_delay_serv->tv_delay, &serv->tv_delay, >)
+			)
+	) {
+		s_log("[LOG] min delay server(type:%d, id:%d)", serv->type, serv->id);
+		servg->min_delay_serv[serv->type] = serv;
+	}
+
+	s_log("[LOG] round-time:%u %u", (unsigned int)serv->tv_delay.tv_sec, (unsigned int)serv->tv_delay.tv_usec);
 
 	serv->tv_receive_pong = tv_now;
 

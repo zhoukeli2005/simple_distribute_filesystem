@@ -69,6 +69,8 @@ struct s_server_group {
 	// mservs and dservs and clients
 	struct s_array * servs[S_SERV_TYPE_MAX];
 
+	struct s_server * min_delay_serv[S_SERV_TYPE_MAX];
+
 	// list for ping/pong
 	struct s_list list_wait_for_ping;
 	struct s_list list_wait_for_pong;
