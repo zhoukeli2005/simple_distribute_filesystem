@@ -2,9 +2,11 @@
 #define s_core_h_
 
 #include <s_string.h>
+#include <s_list.h>
 #include <s_packet.h>
 #include <s_net.h>
 #include <s_server_group.h>
+#include <s_config.h>
 #include <s_common.h>
 
 /* -- block size : 4M -- */
@@ -20,6 +22,7 @@
 enum S_E_CORE_ERR {
 	S_CORE_ERR_NOERR = 0,
 	S_CORE_ERR_BAD_PARAM,
+	S_CORE_ERR_INTERNAL,
 	
 	_S_CORE_ERR_MAX_
 };
@@ -46,6 +49,12 @@ struct s_file_offset {
 };
 
 struct s_file_meta_data {
+	/* -- internal -- */
+	struct s_list __link;
+	int __nblocks;
+
+
+	/* -- public -- */
 	struct s_string * filename;
 	struct s_file_desc fdesc;
 	struct s_file_size fsize;
@@ -54,26 +63,72 @@ struct s_file_meta_data {
 	unsigned short int block_locate[1];
 };
 
+#define S_FILE_MMD_FLAG_DELETED		1
+#define S_FILE_MMD_FLAG_CREATING	2
+#define S_FILE_MMD_FLAG_NORMAL		3
+
 struct s_file_meta_meta_data {
+	/* -- internal -- */
+	struct s_list __link;
+	int __nmserv;
+
+
+	/* -- public -- */
 	struct s_string * filename;
 	struct s_file_desc fdesc;
+
+	unsigned int flags;
 
 	int nmserv;
 	unsigned short int mserver_locate[1];
 };
 
+struct s_mserver {
+	struct s_hash * file_metadata;	// filename --> metadata
+	struct s_hash * file_meta_metadata; // filename --> meta-meta-data
+};
+
+struct s_client {
+	int __dummy;
+};
+
+struct s_dserver {
+	struct s_hash * file_metadata;	// filename --> metadata
+};
+
+struct s_core {
+	int type;
+	int id;
+
+	struct s_server_group * servg;
+
+	union {
+		struct s_client client;
+
+		struct s_mserver mserv;
+
+		struct s_dserver dserv;
+	};
+};
+
+#define s_core_client(c)	&((c)->client)
+#define s_core_mserv(c)		&((c)->mserv)
+#define s_core_dserv(c)		&((c)->dserv)
+
+struct s_core *
+s_core_create( int type, int id, struct s_config * config );
+
+
 /*
- *	do net event
- *
+ *	core poll
  *
  */
-void
-s_core_do_net_event(struct s_server_group * servg, struct s_server * serv, struct s_packet * pkt);
-
+int
+s_core_poll( struct s_core * core, int msec );
 
 
 /*
- *	api callback function
+ *	clint-api callback function
  *
  */
 typedef void(* S_CORE_CALLBACK)(void * udata);
@@ -89,6 +144,9 @@ typedef void(* S_CORE_CALLBACK)(void * udata);
  *
  */
 struct s_core_metadata_param {
+	/* -- internal -- */
+	struct s_list __link;
+
 	/* -- callback -- */
 	union {
 		void * p;
@@ -99,7 +157,7 @@ struct s_core_metadata_param {
 
 	struct s_file_meta_data * result;
 
-	int errno;
+	int error;
 	char errmsg[S_CORE_MAX_ERRMSG_LENGTH];
 
 	/* -- prameter -- */
@@ -110,7 +168,7 @@ struct s_core_metadata_param {
 };
 
 /*
- *	create file
+ *	create file < client api >
  *
  *	parameters:
  *
@@ -122,10 +180,10 @@ struct s_core_metadata_param {
  *		1. s_core_metadata_param.result : file metadata 
  */
 int
-s_core_create_file(struct s_server_group * servg, struct s_core_metadata_param * param);
+s_core_create_file(struct s_core * core, struct s_core_metadata_param * param);
 
 /*
- *	get file metadata
+ *	get file metadata < client api >
  *
  *	parameters:
  *
@@ -138,7 +196,7 @@ s_core_create_file(struct s_server_group * servg, struct s_core_metadata_param *
  *		1. s_core_metadata_param.result : file metadata
  */
 int
-s_core_get_file_metadata(struct s_server_group * servg, struct s_core_metadata_param * param);
+s_core_get_file_metadata(struct s_core * core, struct s_core_metadata_param * param);
 
 /*
  *	expand file size
@@ -153,7 +211,7 @@ s_core_get_file_metadata(struct s_server_group * servg, struct s_core_metadata_p
  *		1. s_core_metadata_param.result : file metadata
  */
 int
-s_core_expand_fsize(struct s_server_group * servg, struct s_core_metadata_param * param);
+s_core_expand_fsize(struct s_core * core, struct s_core_metadata_param * param);
 
 
 
@@ -167,6 +225,10 @@ s_core_expand_fsize(struct s_server_group * servg, struct s_core_metadata_param 
  *
  */
 struct s_core_rw_param {
+	/* -- internal -- */
+	struct s_list __link;
+	int __nblocks;
+	
 	/* -- callback -- */
 	union {
 		void * p;
@@ -175,7 +237,7 @@ struct s_core_rw_param {
 
 	S_CORE_CALLBACK callback;
 
-	int errno;
+	int errer;
 	char errmsg[S_CORE_MAX_ERRMSG_LENGTH];
 
 	/* -- parameter -- */
@@ -205,7 +267,7 @@ struct s_core_rw_param {
  *		2. s_core_rw_param.block_desc : block descriptors related
  */
 int
-s_core_get_block_metadata(struct s_server_group * servg, struct s_core_rw_param * param );
+s_core_get_block_metadata(struct s_core * core, struct s_core_rw_param * param );
 
 
 
@@ -226,7 +288,7 @@ s_core_get_block_metadata(struct s_server_group * servg, struct s_core_rw_param 
  *		none
  */
 int
-s_core_write(struct s_server_group * servg, struct s_core_rw_param * param );
+s_core_write(struct s_core * core, struct s_core_rw_param * param );
 
 
 /*
@@ -246,7 +308,7 @@ s_core_write(struct s_server_group * servg, struct s_core_rw_param * param );
  *		3. s_core_rw_param.buf : data has been read
  */
 int
-s_core_read(struct s_server_group * servg, struct s_core_rw_param * param );
+s_core_read(struct s_core * core, struct s_core_rw_param * param );
 
 #endif
 

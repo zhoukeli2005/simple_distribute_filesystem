@@ -1,5 +1,6 @@
 #include <s_server_group.h>
 #include <s_mem.h>
+#include <s_ipc.h>
 #include "s_servg.h"
 
 static struct s_server_group g_serv;
@@ -26,11 +27,30 @@ struct s_server_group * s_servg_create(int type, int id, struct s_servg_callback
 	s_list_init(&servg->list_wait_for_ping);
 	s_list_init(&servg->list_wait_for_pong);
 
+	memset(&servg->callback, 0, sizeof(struct s_servg_callback));
 	if(callback) {
 		memcpy(&servg->callback, callback, sizeof(struct s_servg_callback));
 	}
 
 	return servg;
+}
+
+int s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_Servg_Callback_t callback)
+{
+	if(serv_type < 0 || serv_type >= S_SERV_TYPE_MAX) {
+		s_log("[Error] servg_register invalid serv_type:%d", serv_type);
+		return -1;
+	}
+	if(fun <= S_PKT_TYPE_USER_DEF_BEGIN_ || fun >= S_PKT_TYPE_MAX_) {
+		s_log("[Error] servg_register invalid fun:%d", fun);
+		return -1;
+	}
+	if(servg->callback.handle_msg[serv_type][fun]) {
+		s_log("[Error] servg_register serv_type:%d, fun:%d. double-register!!", serv_type, fun);
+		return -1;
+	}
+	servg->callback.handle_msg[serv_type][fun] = callback;
+	return 0;
 }
 
 static int iinit_serv(struct s_array * array, int id);
@@ -191,7 +211,7 @@ struct s_array * s_servg_get_serv_array(struct s_server_group * servg, int type)
 	return NULL;
 }
 
-struct s_server * s_servg_get_min_delay_server(struct s_server_group * servg, int type)
+struct s_server * s_servg_get_min_delay_serv(struct s_server_group * servg, int type)
 {
 	struct s_server * serv = servg->min_delay_serv[type];
 	if(serv) {
@@ -211,6 +231,16 @@ struct s_server * s_servg_get_min_delay_server(struct s_server_group * servg, in
 struct s_conn * s_servg_get_conn(struct s_server * serv)
 {
 	return serv->conn;
+}
+
+void s_servg_set_udata(struct s_server * serv, void * ud)
+{
+	serv->udata = ud;
+}
+
+void * s_servg_get_udata(struct s_server * serv)
+{
+	return serv->udata;
 }
 
 static S_LIST_DECLARE(g_free_serv);

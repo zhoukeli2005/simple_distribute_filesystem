@@ -4,7 +4,8 @@ OUTPATH = ../$(LIBPATH)
 
 CFLAGS += -I../include/
 
-OBJS = s_queue.o s_string.o s_array.o s_hash.o s_config.o s_num_str.o s_mem.o
+OBJS = s_core.o	 s_core_param.o	\
+       s_core_create_client.o s_core_create_mserv.o s_core_create_dserv.o
 
 .PHONY: all clean
 

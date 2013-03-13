@@ -100,3 +100,52 @@
 			}
 
 													(total 34 hour)
+
+3. create file
+
+	1. client --(param:create)--> meta-serv
+
+	2.      meta-serv (check auth) ...
+		meta-serv --(can create ?)--> all other meta-serv
+		meta-serv (set timeout -> failed)
+
+	3.              all other meta-serv (check auth) ...
+
+	4.      meta-serv <--(can or cannot)-- all other meta-serv
+
+	5.      meta-serv --(decide auth and main/slave meta-serv)--> all other meta-serv
+
+	6.              all meta-serv (create file-meta-meta-data)
+
+	7.              main meta-serv (create file-meta-data) ...
+			main meta-serv --(file-meta-data)--> related data-serv
+			main meta-serv <--(accept) -- related data-serv
+
+	8.      meta-serv <--(file-meta-data)-- main meta-serv
+
+	9. client <--(file-meta-data)-- meta-serv
+
+4. module layer
+
+	1. net-layer 
+		raw epoll net layer, point-to-point connection based on tcp
+		support :
+			send/receive packets
+
+	2. server-group-layer
+		based on net-layer
+		all servers defined in config.conf will compose a big server-group
+		support :
+			each server will be connected with all other servers
+			reconnect when connection is broken
+			ping/pong
+			keep-alive
+			caculate roundup-time
+
+	3. core-layer(simple-distribute-filesystem layer)
+		based on server-group-layer
+		support :
+			client
+			mserver
+			dserver
+

@@ -10,6 +10,7 @@
 
 #include <sys/ioctl.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #define MAX_THREAD	256

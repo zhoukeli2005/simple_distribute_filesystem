@@ -5,6 +5,7 @@
 #include <s_packet.h>
 #include <s_config.h>
 #include <s_common.h>
+#include <s_ipc.h>
 
 struct s_server;
 struct s_server_group;
@@ -25,7 +26,7 @@ struct s_servg_callback {
 	void(*serv_closed)	(struct s_server * serv, void * udata);
 
 
-	S_Servg_Callback_t handle_msg[S_SERV_TYPE_MAX];
+	S_Servg_Callback_t handle_msg[S_SERV_TYPE_MAX][S_PKT_TYPE_MAX_];
 };
 
 
@@ -39,6 +40,16 @@ struct s_servg_callback {
 struct s_server_group * 
 s_servg_create(int type, int id, struct s_servg_callback * callback);
 
+
+/*
+ *	s_servg_register_
+ *
+ *	@param serv_type : server's type
+ *	@param fun : fun
+ *	@param callback :
+ */
+int
+s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_Servg_Callback_t callback);
 
 /*
  *	s_servg_init_config
@@ -84,6 +95,15 @@ s_servg_get_min_delay_serv(struct s_server_group * servg, int type);
  */
 struct s_conn *
 s_servg_get_conn(struct s_server * serv);
+
+int
+s_servg_get_id(struct s_server * serv);
+
+void
+s_servg_set_udata(struct s_server * serv, void * ud);
+
+void *
+s_servg_get_udata(struct s_server * serv);
 
 #endif
 

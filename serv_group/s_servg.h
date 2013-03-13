@@ -43,6 +43,9 @@ struct s_server {
 
 	// server can be : wait_for_conn, wait_for_identify, wait_for_ping, wait_for_pong
 	struct s_list list;
+
+	// user data
+	void * udata;
 };
 
 struct s_server_group {

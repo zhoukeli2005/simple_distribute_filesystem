@@ -26,20 +26,24 @@ export MSERVER DSERVER CLIENT
 
 all:
 	make -C ./common
+	make -C ./misc
 	make -C ./thread
 	make -C ./net
 	make -C ./fs
 	make -C ./serv_group
+	make -C ./core
 	ar -r $(LIB) $(OBJS)
 	make -C ./mserver
 #	make -C ./client
 
 clean:
 	make -C ./common clean
+	make -C ./misc clean
 	make -C ./thread clean
 	make -C ./net clean
 	make -C ./fs clean
 	make -C ./serv_group clean
+	make -C ./core clean
 	make -C ./mserver clean
 	make -C ./client clean
 	@rm -rf $(OBJS)

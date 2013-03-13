@@ -41,6 +41,7 @@ struct s_queue * s_queue_create(int elem_size, int elem_num)
 
 void s_queue_destroy(struct s_queue * q)
 {
+	s_free(q->p);
 	s_free(q);
 }
 

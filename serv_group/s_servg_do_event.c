@@ -235,9 +235,8 @@ void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
 
 	int type = serv->type;
 
-	s_packet_seek(pkt, 0);
-	if(servg->callback.handle_msg[type]) {
-		servg->callback.handle_msg[type](serv, pkt, servg->callback.udata);
+	if(servg->callback.handle_msg[type][fun]) {
+		servg->callback.handle_msg[type][fun](serv, pkt, servg->callback.udata);
 	}
 
 	return;

@@ -2,8 +2,7 @@
 
 CFLAGS += -I../include/
 
-OBJS = s_main.o s_server.o	\
-       s_do_net_event_m.o s_do_net_event_d.o s_do_net_event_c.o
+OBJS = s_main.o s_server.o
 
 LIBS = ../$(LIB)
 
