@@ -34,6 +34,7 @@ all:
 	make -C ./core
 	ar -r $(LIB) $(OBJS)
 	make -C ./mserver
+#	make -C ./dserver
 #	make -C ./client
 
 clean:
@@ -45,7 +46,8 @@ clean:
 	make -C ./serv_group clean
 	make -C ./core clean
 	make -C ./mserver clean
-	make -C ./client clean
+#	make -C ./dserver clean
+#	make -C ./client clean
 	@rm -rf $(OBJS)
 	@rm -rf $(LIB)
 

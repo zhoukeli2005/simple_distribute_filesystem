@@ -122,6 +122,8 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 		struct s_string * ip = s_config_read_string(servg->config, ip_str);
 		int port = s_config_read_int(servg->config, port_str);
 
+		s_log("[LOG] select region:%s, ip:%d, port:%d", p, s_string_data_p(ip), port);
+
 		struct s_array * servs = servg->servs[type];
 		if(iinit_serv(servs, id) < 0) {
 			s_log("[Error] init serv (%d) error!", id);
@@ -147,7 +149,7 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 			s_log("[LOG] find myself in config.");
 			servg->net = s_net_create(port, &s_servg_do_event, servg);
 			if(!servg->net) {
-				s_log("[Error] net init error!");
+				s_log("[Error] net init error!port:%d", port);
 				return -1;
 			}
 		}

@@ -26,14 +26,35 @@ int main(int argc, char * argv[])
 
 	/* 3 -- parse serv_id from program name -- */
 	int id = s_util_get_serv_id(argv[0], '_');
-	if(id <= 0) {
+
+	int type = -1;
+
+	if(strstr(argv[0], "mserv")) {
+		// it is mserver
+		type = S_SERV_TYPE_M;
+	}
+	if(strstr(argv[0], "dserv")) {
+		// it is a dserv
+		if(type != -1) {
+			s_log("[Error] the program name(%s) **must not** contain both 'mserv' and 'dserv'!");
+			return 0;
+		}
+		type = S_SERV_TYPE_D;
+	}
+
+	if(type == -1) {
+		// it is a client
+		type = S_SERV_TYPE_C;
+	}
+
+	if(type != S_SERV_TYPE_C && id <= 0) {
 		s_log("[Error] miss id!");
 		return 0;
 	}
 
 	/* 4 -- create main data-structure : s_core -- */
 
-	struct s_core * core = s_core_create(S_SERV_TYPE_M, id, config);
+	struct s_core * core = s_core_create(type, id, config);
 
 	if(!core) {
 		s_log("s_core create error!");
