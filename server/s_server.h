@@ -13,5 +13,10 @@
 #include <s_ipc.h>
 #include <s_server_group.h>
 
+void *
+s_ud_client_init(struct s_core * core);
+void
+s_ud_client_update(struct s_core * core, void * ud);
+
 #endif
 

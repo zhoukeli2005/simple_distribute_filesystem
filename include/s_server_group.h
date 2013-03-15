@@ -99,6 +99,9 @@ s_servg_get_conn(struct s_server * serv);
 int
 s_servg_get_id(struct s_server * serv);
 
+int
+s_servg_get_type(struct s_server * serv);
+
 void
 s_servg_set_udata(struct s_server * serv, void * ud);
 

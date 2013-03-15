@@ -30,37 +30,37 @@ enum S_ENUM_PKT_TYPE {
 	S_PKT_TYPE_MAX_
 };
 
-#define s_ipc_pkt_identify(p, type, id, pwd)	\
-	do {	\
-		p = s_packet_create(16);	\
-		s_packet_write_int(p, S_PKT_TYPE_IDENTIFY);	\
-		s_packet_write_uint(p, pwd);	\
-		s_packet_write_int(p, type);	\
-		s_packet_write_int(p, id);	\
-	} while(0)
+#define s_packet(req, fun, sz)	({	\
+		struct s_packet * __pkt = s_packet_create(8 + sz);	\
+		s_packet_write_uint(__pkt, req);	\
+		s_packet_write_uint(__pkt, fun);	\
+		__pkt; })
 
-#define s_ipc_pkt_identify_back(p, ret)	\
-	do {	\
-		p = s_packet_create(8);	\
-		s_packet_write_int(p, S_PKT_TYPE_IDENTIFY_BACK);	\
-		s_packet_write_int(p, ret);	\
-	} while(0)
+#define s_packet_read_fun(pkt, out) ({	\
+	int __r = 1;	\
+	__r = s_packet_seek(pkt, 4);	\
+	__r = __r >= 0 && s_packet_read_uint(pkt, out) >= 0;	\
+	__r; })
 
+#define s_packet_write_fun(pkt, fun) ({	\
+	int __r = 1;	\
+	__r = s_packet_seek(pkt, 4);	\
+	__r = __r >= 0 && s_packet_write_uint(pkt, fun) >= 0;	\
+	__r; })
 
-#define s_ipc_pkt_ping(p, sec, usec)	\
-	do {	\
-		p = s_packet_create(12);	\
-		s_packet_write_int(p, S_PKT_TYPE_PING);	\
-		s_packet_write_uint(p, sec);	\
-		s_packet_write_uint(p, usec);	\
-	} while(0)
+#define s_packet_read_req(pkt, out) ({	\
+	int __r = 1;	\
+	s_packet_seek(pkt, 0);	\
+	__r = s_packet_read_uint(pkt, out);	\
+	__r = __r >= 0 && s_packet_seek(pkt, 8) >= 0;	\
+	__r; })
 
-#define s_ipc_pkt_pong(p)	\
-	do {	\
-		s_packet_seek(p, 0);	\
-		s_packet_write_int(p, S_PKT_TYPE_PONG);	\
-	} while(0)
-
+#define s_packet_write_req(pkt, req) ({	\
+	int __r = 1;	\
+	s_packet_seek(pkt, 0);	\
+	__r = s_packet_write_uint(pkt, req);	\
+	__r = __r >= 0 && s_packet_seek(pkt, 8) >= 0;	\
+	__r; })
 
 #endif
 

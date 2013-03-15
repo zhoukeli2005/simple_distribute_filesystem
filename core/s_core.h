@@ -7,6 +7,8 @@
 #include <s_net.h>
 #include <s_server_group.h>
 #include <s_config.h>
+#include <s_hash.h>
+#include <s_mem.h>
 #include <s_common.h>
 
 /* -- block size : 4M -- */
@@ -96,9 +98,15 @@ struct s_dserver {
 	struct s_hash * file_metadata;	// filename --> metadata
 };
 
+struct s_serv_d {
+	struct s_hash * req_hash;
+};
+
 struct s_core {
 	int type;
 	int id;
+
+	unsigned int req_id;	// req id
 
 	struct s_server_group * servg;
 

@@ -1,0 +1,2 @@
+-- (s_hash.c:add) s_hash.next() -- iterator s_hash
+-- (s_core.c:add) when_server_conn_broken : release s_server->s_serv_d.s_hash and other's MEM

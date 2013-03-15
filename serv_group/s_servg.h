@@ -10,7 +10,8 @@
 #include <s_config.h>
 #include <s_common.h>
 #include <s_thread.h>
-#include <s_ipc.h>
+
+#include "s_servg_pkt.h"
 
 /* ------ Serv Flags ------------ */
 #define S_SERV_FLAG_ESTABLISHED (1 << 0)        // server is connected and established

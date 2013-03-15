@@ -47,8 +47,6 @@ static struct s_packet * iget_free_packet(int size)
 	i = 4;
 	while((1 << i) < size) i++;
 
-	s_log("packet size : %d, %d", size, 1<<i);
-
 	struct s_packet * pkt;
 
 	struct s_list * list = &g_free[i];
@@ -205,25 +203,28 @@ int s_packet_read_uint(struct s_packet * pkt, unsigned int * i)
 	return 0;
 }
 
-struct s_string * s_packet_read_string(struct s_packet * pkt)
+int s_packet_read_string(struct s_packet * pkt, struct s_string ** pstr)
 {
 	short len;
 	if(s_packet_read_short(pkt, &len) < 0) {
 		s_log("read string : no len!");
-		return NULL;
+		return -1;
 	}
 	if(len < 0) {
 		s_log("read string : too long(%d)!", len);
-		return NULL;
+		return -1;
 	}
 	if(pkt->pos + len > pkt->size) {
 		s_log("no data for string:%d", len);
-		return NULL;
+		return -1;
 	}
 	char * p = s_packet_data_p(pkt) + pkt->pos;
 	struct s_string * str = s_string_create_len(p, len);
 	pkt->pos += len;
-	return str;
+	if(*pstr) {
+		*pstr = str;
+	}
+	return 0;
 }
 
 int s_packet_eof(struct s_packet * pkt)
@@ -351,3 +352,12 @@ void s_packet_drop(struct s_packet * pkt)
 	}
 }
 
+void s_packet_dump(struct s_packet * pkt)
+{
+	s_log("dump packet, size:%d", pkt->size);
+	int i;
+	char * p = s_packet_data_p(pkt);
+	for(i = 0; i < pkt->size; ++i) {
+		s_log("%x", p[i]);
+	}
+}

@@ -1,4 +1,5 @@
 #include "s_servg.h"
+#include "s_servg_pkt.h"
 
 int s_servg_check_list(struct s_server_group * servg)
 {
@@ -42,8 +43,7 @@ int s_servg_check_list(struct s_server_group * servg)
 		serv->tv_send_identify = tv_now;
 
 		// send identification
-		struct s_packet * pkt;
-		s_ipc_pkt_identify(pkt, servg->type, servg->id, servg->ipc_pwd);
+		struct s_packet * pkt = s_servg_pkt_identify(servg->type, servg->id, servg->ipc_pwd);
 		s_net_send(serv->conn, pkt);
 		s_packet_drop(pkt);
 	}
@@ -81,8 +81,7 @@ int s_servg_check_list(struct s_server_group * servg)
 		serv->tv_send_ping = tv_now;
 
 		// send packet
-		struct s_packet * pkt;
-		s_ipc_pkt_ping(pkt, tv_now.tv_sec, tv_now.tv_usec);
+		struct s_packet * pkt = s_servg_pkt_ping(tv_now.tv_sec, tv_now.tv_usec);
 		s_net_send(serv->conn, pkt);
 		s_packet_drop(pkt);
 	}

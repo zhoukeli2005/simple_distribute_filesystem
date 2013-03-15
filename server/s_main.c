@@ -36,7 +36,7 @@ int main(int argc, char * argv[])
 	if(strstr(argv[0], "dserv")) {
 		// it is a dserv
 		if(type != -1) {
-			s_log("[Error] the program name(%s) **must not** contain both 'mserv' and 'dserv'!");
+			s_log("[Error] the program name(%s) **must not** contain both 'mserv' and 'dserv'!", argv[0]);
 			return 0;
 		}
 		type = S_SERV_TYPE_D;
@@ -63,12 +63,22 @@ int main(int argc, char * argv[])
 
 	s_log("core create ok, id:%d", id);
 
-	/* 4 -- do main process -- */
+	/* 5 -- if it's client, do user-defined-client-init */
+	void * ud = NULL;
+	if(type == S_SERV_TYPE_C) {
+		ud = s_ud_client_init(core);
+	}
+
+	/* 6 -- do main process -- */
 	while(1) {
 		/* 1. do servg stuff */
 		if(s_core_poll(core, 10) < 0) {
 			s_log("[Error] s_core_poll error!");
 			break;
+		}
+
+		if(type == S_SERV_TYPE_C) {
+//			s_ud_client_update(core, ud);
 		}
 	}
 	return 0;

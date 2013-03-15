@@ -297,7 +297,7 @@ void s_hash_del(struct s_hash * H, struct s_hash_key * key)
 	}
 }
 
-#if 1
+#if 0
 int main(int argc, char * argv[])
 {
 	struct A {

@@ -122,7 +122,7 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 		struct s_string * ip = s_config_read_string(servg->config, ip_str);
 		int port = s_config_read_int(servg->config, port_str);
 
-		s_log("[LOG] select region:%s, ip:%d, port:%d", p, s_string_data_p(ip), port);
+		s_log("[LOG] select region:%s, ip:%p, port:%d", p, s_string_data_p(ip), port);
 
 		struct s_array * servs = servg->servs[type];
 		if(iinit_serv(servs, id) < 0) {
@@ -164,7 +164,9 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 
 		// wait for connect
 		s_list_init(&serv->list);
-		if(type >= servg->type && id > servg->id && serv->ip && serv->port > 0) {
+		if(serv->ip && serv->port &&
+			(type > servg->type || (type == servg->type && id > servg->id))
+		) {
 			s_list_insert_tail(&servg->list_wait_for_conn, &serv->list);
 		}
 	}
@@ -228,6 +230,16 @@ struct s_server * s_servg_get_min_delay_serv(struct s_server_group * servg, int 
 		}
 	}
 	return NULL;
+}
+
+int s_servg_get_id(struct s_server * serv)
+{
+	return serv->id;
+}
+
+int s_servg_get_type(struct s_server * serv)
+{
+	return serv->type;
 }
 
 struct s_conn * s_servg_get_conn(struct s_server * serv)

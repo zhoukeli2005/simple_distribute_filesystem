@@ -36,8 +36,8 @@ s_packet_read_int(struct s_packet * pkt, int * i);
 int
 s_packet_read_uint(struct s_packet * pkt, unsigned int * u);
 
-struct s_string *
-s_packet_read_string(struct s_packet * pkt);
+int
+s_packet_read_string(struct s_packet * pkt, struct s_string ** pp);
 
 int
 s_packet_eof(struct s_packet * pkt);
@@ -69,6 +69,16 @@ s_packet_write_string(struct s_packet * pkt, struct s_string * s);
 		goto error;\
 	}
 
+#define s_packet_write(pkt, in, type, error)	\
+	if(s_packet_write_##type(pkt, in) < 0) {	\
+		s_log("s_packet_write_" #type "error!");	\
+		goto error;\
+	}
+
+#define s_packet_size_for_string(s)	(2 + s_string_len(s))
+#define s_packet_size_for_int(i)	4
+#define s_packet_size_for_uint(u)	4
+
 /*
  *	Increase Reference Count
  *
@@ -83,5 +93,8 @@ s_packet_grab(struct s_packet * pkt);
  */
 void
 s_packet_drop(struct s_packet * pkt);
+
+void
+s_packet_dump(struct s_packet * pkt);
 
 #endif

@@ -1,5 +1,6 @@
 #include "s_core.h"
 #include "s_core_create.h"
+#include <s_mem.h>
 
 static struct s_core g_core;
 
@@ -15,6 +16,8 @@ struct s_core * s_core_create( int type, int id, struct s_config * config )
 	struct s_core * core = &g_core;
 	core->type = type;
 	core->id = id;
+
+	core->req_id = 1;
 
 	struct s_servg_callback callback = {
 		.udata = core,
@@ -93,6 +96,18 @@ static void when_serv_established(struct s_server * serv, void * ud)
 
 	s_used(core);
 	s_used(serv);
+
+	int type = s_servg_get_type(serv);
+	if(type == S_SERV_TYPE_M || type == S_SERV_TYPE_D) {
+		struct s_serv_d * d = s_malloc(struct s_serv_d, 1);
+		d->req_hash = s_hash_create(sizeof(void *), 16);
+		if(!d->req_hash) {
+			s_free(d);
+			s_log("[Error] no mem for req_hash!");
+			return;
+		}
+		s_servg_set_udata(serv, d);
+	}
 }
 
 static void when_serv_closed(struct s_server * serv, void * ud)
@@ -101,4 +116,21 @@ static void when_serv_closed(struct s_server * serv, void * ud)
 
 	s_used(core);
 	s_used(serv);
+
+	int type = s_servg_get_type(serv);
+	if(type == S_SERV_TYPE_M || type == S_SERV_TYPE_D) {
+		struct s_serv_d * d = s_servg_get_udata(serv);
+		if(!d) {
+			return;
+		}
+		struct s_hash * req_hash = d->req_hash;
+		if(req_hash) {
+			// TODO : remove xx in req_hash
+
+			s_hash_destroy(req_hash);
+		}
+		s_free(d);
+		s_servg_set_udata(serv, NULL);
+		return;
+	}
 }

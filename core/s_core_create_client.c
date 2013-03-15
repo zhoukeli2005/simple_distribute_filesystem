@@ -1,5 +1,6 @@
 #include "s_core.h"
 #include "s_core_create.h"
+#include "s_core_create_pkt.h"
 
 #define error_out()	goto label_error
 
@@ -27,6 +28,14 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 		error_out();
 	}
 
+	struct s_serv_d * d = s_servg_get_udata(mserv);
+	if(!d || !d->req_hash) {
+		error = S_CORE_ERR_INTERNAL;
+		errmsg = "no serv_d or no serv_d->req_hash in mserv!";
+		
+		error_out();
+	}
+
 
 	/* 2. check param */
 	if(!param->filename) {
@@ -42,7 +51,39 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 		error_out();
 	}
 
-	/* 3. send create packet */
+	/* 3. create packet */
+	struct s_packet * pkt = s_core_create_pkt_create(core, param);
+	if(!pkt) {
+		error = S_CORE_ERR_INTERNAL;
+		errmsg = "no mem for create_pkt!";
+
+		error_out();
+	}
+
+	/* 4. save rpc */
+	unsigned int req_id;
+	if(s_packet_read_req(pkt, &req_id) < 0) {
+		error = S_CORE_ERR_INTERNAL;
+		errmsg = "req_id create error!";
+		
+		error_out();
+	}
+
+	struct s_core_metadata_param * param_saved = s_core_metadata_param_create();
+	memcpy(param_saved, param, sizeof(struct s_core_metadata_param));
+
+	void ** pp = s_hash_set_num(d->req_hash, req_id);
+	if(!pp) {
+		error = S_CORE_ERR_INTERNAL;
+		errmsg = "no mem for req_hash.set!";
+
+		error_out();
+	}
+	*pp = param_saved;
+
+	/* 5. send packet */
+	s_net_send(conn, pkt);
+	s_packet_drop(pkt);
 
 	return 0;
 

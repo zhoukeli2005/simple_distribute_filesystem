@@ -21,9 +21,33 @@ mserver-1:
 	port = 8001
 	space = /tmp/mserv_1/
 
+mserver-2:
+	ip = 127.0.0.1
+	port = 8002
+	space = /tmp/mserv_2/
+
 # data server
 dserver-1:
 	ip = 127.0.0.1
 	port = 7001
 	space = /tmp/dserv_1/
 
+dserver-2:
+	ip = 127.0.0.1
+	port = 7002
+	space = /tmp/dserv_2/
+
+dserver-3:
+	ip = 127.0.0.1
+	port = 7003
+	space = /tmp/dserv_3/
+
+dserver-4:
+	ip = 127.0.0.1
+	port = 7004
+	space = /tmp/dserv_4/
+
+dserver-5:
+	ip = 127.0.0.1
+	port = 7005
+	space = /tmp/dserv_5/

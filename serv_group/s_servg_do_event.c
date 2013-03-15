@@ -1,4 +1,5 @@
 #include "s_servg.h"
+#include "s_servg_pkt.h"
 
 static void iwhen_conn_closed(struct s_server_group * servg, struct s_conn * conn)
 {
@@ -19,11 +20,11 @@ static void iwhen_conn_closed(struct s_server_group * servg, struct s_conn * con
 
 void ihandle_identify(struct s_server_group * servg, struct s_conn * conn, struct s_packet * pkt)
 {
-	int tt;
-	s_packet_read(pkt, &tt, int, label_read_error);
+	unsigned int fun;
+	s_packet_read(pkt, &fun, fun, label_read_error);
 
-	if(tt != S_PKT_TYPE_IDENTIFY) {
-		s_log("[Error]expect identify, got:%d", tt);
+	if(fun != S_PKT_TYPE_IDENTIFY) {
+		s_log("[Error]expect identify, got:%u", fun);
 		s_net_close(conn);
 		return;
 	}
@@ -75,8 +76,7 @@ void ihandle_identify(struct s_server_group * servg, struct s_conn * conn, struc
 	s_list_insert_tail(&servg->list_wait_for_ping, &serv->list);
 
 	// auth ok
-	struct s_packet * tmp;
-	s_ipc_pkt_identify_back(tmp, 1);
+	struct s_packet * tmp = s_servg_pkt_identify_back(1);
 	s_net_send(conn, tmp);
 	s_packet_drop(tmp);
 
@@ -94,8 +94,7 @@ label_read_error:
 
 label_auth_error:
 	{
-		struct s_packet * tmp;
-		s_ipc_pkt_identify_back(tmp, 0);
+		struct s_packet * tmp = s_servg_pkt_identify_back(0);
 		s_net_send(conn, tmp);
 		s_packet_drop(tmp);
 	}
@@ -136,7 +135,7 @@ label_read_error:
 
 static void ihandle_ping(struct s_server_group * servg, struct s_server * serv, struct s_packet * pkt)
 {
-	s_ipc_pkt_pong(pkt);
+	s_servg_pkt_pong(pkt);
 
 	s_net_send(serv->conn, pkt);
 }
@@ -147,7 +146,6 @@ static void ihandle_pong(struct s_server_group * servg, struct s_server * serv, 
 	s_packet_read(pkt, &sec, uint, label_read_error);
 	s_packet_read(pkt, &usec, uint, label_read_error);
 
-	s_log("[LOG] handle pong, sec:%u, usec:%u", (unsigned int)sec, (unsigned int)usec);
 	struct timeval tv_now;
 	gettimeofday(&tv_now, NULL);
 
@@ -163,13 +161,12 @@ static void ihandle_pong(struct s_server_group * servg, struct s_server * serv, 
 			 timercmp(&min_delay_serv->tv_delay, &serv->tv_delay, >)
 			)
 	) {
-		s_log("[LOG] min delay server(type:%d, id:%d)", serv->type, serv->id);
 		servg->min_delay_serv[serv->type] = serv;
 	}
 
-	s_log("[LOG] round-time:%u %u", (unsigned int)serv->tv_delay.tv_sec, (unsigned int)serv->tv_delay.tv_usec);
-
 	serv->tv_receive_pong = tv_now;
+
+	s_log("roundup-time: %u, %u", (unsigned int)(serv->tv_delay.tv_sec), (unsigned int)(serv->tv_delay.tv_usec));
 
 	// move to `wait for ping list`
 	s_list_del(&serv->list);
@@ -201,8 +198,6 @@ void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
 		return;
 	}
 
-	s_log("[LOG]receive a packet, size:%d", s_packet_size(pkt));
-
 	struct s_server * serv = s_net_get_udata(conn);
 	if(!serv) {
 		// must be identify
@@ -210,8 +205,8 @@ void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
 		return;
 	}
 
-	int fun;
-	if(s_packet_read_int(pkt, &fun) < 0) {
+	unsigned int fun;
+	if(s_packet_read_fun(pkt, &fun) < 0) {
 		s_log("[Error] packet must start with Function!");
 		return;
 	}
