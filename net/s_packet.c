@@ -4,7 +4,7 @@
 #include <s_common.h>
 
 /*
- *	Packet - | size (4 bytes) | ... data ( var size ) ... |
+ *	Packet - | size (4 bytes) fun (4 bytes) req_id (4 bytes) | ... data ( var size ) ... |
  *
  */
 
@@ -14,6 +14,16 @@
 /* -- max packet size : 4M -- */
 #define S_PKT_MAX_SZ_BITS	22
 #define S_PKT_MAX_SZ		(1 << S_PKT_MAX_SZ_BITS)
+
+#define S_PKT_SZ_POS	0
+#define S_PKT_SZ_SIZE	4
+#define S_PKT_FUN_POS	(S_PKT_SZ_POS + S_PKT_SZ_SIZE)
+#define S_PKT_FUN_SIZE	4
+#define S_PKT_REQ_POS	(S_PKT_FUN_POS + S_PKT_FUN_SIZE)
+#define S_PKT_REQ_SIZE	4
+#define S_PKT_HEAD_SIZE	(S_PKT_SZ_SIZE + S_PKT_FUN_SIZE + S_PKT_REQ_SIZE)
+#define S_PKT_DATA_POS	S_PKT_HEAD_SIZE
+
 
 struct s_packet {
 	int size;
@@ -55,7 +65,7 @@ static struct s_packet * iget_free_packet(int size)
 		s_list_del(p);
 		pkt = s_list_entry(p, struct s_packet, list);
 	} else {
-		int real_sz = sizeof(struct s_packet) + 4 + (1 << i);
+		int real_sz = sizeof(struct s_packet) + S_PKT_HEAD_SIZE + (1 << i);
 		pkt = (struct s_packet *)s_malloc(char, real_sz);
 	}
 	pkt->exp = i;
@@ -77,10 +87,10 @@ struct s_packet * s_packet_create(int size)
 		return NULL;
 	}
 
-	size += 4;
+	size += S_PKT_HEAD_SIZE;
 
 	pkt->size = size;
-	pkt->pos = 4;
+	pkt->pos = S_PKT_DATA_POS;
 	pkt->ref_count = 1;
 
 	char * p = (char *)(pkt + 1);
@@ -105,7 +115,7 @@ struct s_packet * s_packet_create_from(char * p, int len)
 		return NULL;
 	}
 
-	struct s_packet * pkt = s_packet_create(sz - 4);
+	struct s_packet * pkt = s_packet_create(sz - S_PKT_HEAD_SIZE);
 	char * data = (char *)(pkt + 1);
 	memcpy(data, p, sz);
 
@@ -125,12 +135,74 @@ char * s_packet_data_p(struct s_packet * pkt)
 
 int s_packet_seek(struct s_packet * pkt, int offset)
 {
-	int sz_can_rw = pkt->size - 4;
+	int sz_can_rw = pkt->size - S_PKT_HEAD_SIZE;
 	if(offset < 0 || offset >= sz_can_rw) {
 		s_log("seek offset:%d of %d not valid!", offset, sz_can_rw);
 		return -1;
 	}
-	pkt->pos = offset + 4;
+	pkt->pos = offset + S_PKT_DATA_POS;
+	return 0;
+}
+
+unsigned int s_packet_get_fun(struct s_packet * pkt)
+{
+	if(pkt->size < S_PKT_HEAD_SIZE) {
+		s_log("[Error] get_fun:Packet size is less then Head size!");
+		return 0;
+	}
+
+	int fun;
+	int pos = pkt->pos;
+	pkt->pos = S_PKT_FUN_POS;
+	s_packet_read_uint(pkt, &fun);
+	pkt->pos = pos;
+
+	return fun;
+}
+
+int s_packet_set_fun(struct s_packet * pkt, unsigned int fun)
+{
+	if(pkt->size < S_PKT_HEAD_SIZE) {
+		s_log("[Error] set_fun:Packet size is less then Head size!");
+		return -1;
+	}
+
+	int pos = pkt->pos;
+	pkt->pos = S_PKT_FUN_POS;
+	s_packet_write_uint(pkt, fun);
+	pkt->pos = pos;
+
+	return 0;
+}
+
+unsigned int s_packet_get_req(struct s_packet * pkt)
+{
+	if(pkt->size < S_PKT_HEAD_SIZE) {
+		s_log("[Error] get_req:Packet size is less then Head size!");
+		return 0;
+	}
+
+	int req;
+	int pos = pkt->pos;
+	pkt->pos = S_PKT_REQ_POS;
+	s_packet_read_uint(pkt, &req);
+	pkt->pos = pos;
+
+	return fun;
+}
+
+int s_packet_set_req(struct s_packet * pkt, unsigned int req)
+{
+	if(pkt->size < S_PKT_HEAD_SIZE) {
+		s_log("[Error] set_req:Packet size is less then Head size!");
+		return -1;
+	}
+
+	int pos = pkt->pos;
+	pkt->pos = S_PKT_REQ_POS;
+	s_packet_write_uint(pkt, req);
+	pkt->pos = pos;
+
 	return 0;
 }
 

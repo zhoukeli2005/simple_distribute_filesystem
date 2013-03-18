@@ -51,6 +51,10 @@ struct s_conn {
 
 	// udata
 	void * udata;
+
+	// rpc
+	unsigned int req_id;
+	struct s_hash * rpc_hash;
 };
 
 struct s_net {
@@ -596,3 +600,27 @@ out:
 	return;
 }
 
+/* -------------- RPC --------------- */
+struct irpc_param {
+	struct s_list link;
+
+	unsigned int req_id;
+
+	void * ud;
+	S_NET_RPC_CALLBACK callback;
+};
+static S_LIST_DECLARE(g_rpc_param);
+
+static struct irpc_param * irpc_param_get_free()
+{
+	struct irpc_param * param = NULL;
+	if(!s_list_empty(&g_rpc_param)) {
+		param = s_list_first_entry(&g_rpc_param, struct irpc_param, link);
+		s_list_del(&param->link);
+	} else {
+		param = s_malloc(struct irpc_param, 1);
+	}
+	s_list_init(&param->link);
+
+	return param;
+}

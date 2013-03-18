@@ -22,6 +22,31 @@ int
 s_packet_seek(struct s_packet * pkt, int offset);
 
 int
+s_packet_tell(struct s_packet * pkt);
+
+
+/*
+ *	fun & req
+ *
+ */
+unsigned int
+s_packet_get_fun(struct s_packet * pkt);
+
+int
+s_packet_set_fun(struct s_packet * pkt, unsigned int fun);
+
+unsigned int
+s_packet_get_req(struct s_packet * pkt);
+
+int
+s_packet_set_req(struct s_packet * pkt, unsigned int req);
+
+
+/*
+ *	read & write
+ *
+ */
+int
 s_packet_read_char(struct s_packet * pkt, char * c);
 
 int
