@@ -30,11 +30,17 @@
 
 #include "s_core.h"
 
-// client
-void
-s_core_client_create_back( struct s_server * serv, struct s_packet * pkt, void * ud );
-
 // mserv
+struct s_core_mcreating {
+	struct s_core * core;
+
+	struct s_string * fname;
+	struct s_server * client;
+	struct s_file_size size;
+
+	int ncheck;
+};
+
 void
 s_core_mserv_create( struct s_server * serv, struct s_packet * pkt, void * ud );
 

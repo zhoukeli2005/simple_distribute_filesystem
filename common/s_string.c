@@ -140,9 +140,10 @@ unsigned int s_string_get_hash(struct s_string * str)
 	return str->hash;
 }
 
-void s_string_grab(struct s_string * str)
+struct s_string * s_string_grab(struct s_string * str)
 {
 	str->ref_count++;
+	return str;
 }
 
 void s_string_drop(struct s_string * str)

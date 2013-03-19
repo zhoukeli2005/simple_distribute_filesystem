@@ -151,7 +151,7 @@ unsigned int s_packet_get_fun(struct s_packet * pkt)
 		return 0;
 	}
 
-	int fun;
+	unsigned int fun;
 	int pos = pkt->pos;
 	pkt->pos = S_PKT_FUN_POS;
 	s_packet_read_uint(pkt, &fun);
@@ -182,13 +182,13 @@ unsigned int s_packet_get_req(struct s_packet * pkt)
 		return 0;
 	}
 
-	int req;
+	unsigned int req;
 	int pos = pkt->pos;
 	pkt->pos = S_PKT_REQ_POS;
 	s_packet_read_uint(pkt, &req);
 	pkt->pos = pos;
 
-	return fun;
+	return req;
 }
 
 int s_packet_set_req(struct s_packet * pkt, unsigned int req)

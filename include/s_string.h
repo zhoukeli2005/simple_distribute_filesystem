@@ -56,13 +56,11 @@ s_string_get_hash(struct s_string * str);
 int
 s_string_equal(struct s_string * a, struct s_string * b);
 
-void
+struct s_string *
 s_string_grab(struct s_string * str);
 
 void
 s_string_drop(struct s_string * str);
-
-#define s_string_assign(to, s)	s_string_grab(s); to = s
 
 
 #endif

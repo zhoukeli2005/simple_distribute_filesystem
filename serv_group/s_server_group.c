@@ -143,6 +143,7 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 		}
 		serv->ip = ip;
 		serv->port = port;
+		serv->mem = 0;
 
 		if(type == servg->type && id == servg->id) {
 			// myself
@@ -225,7 +226,7 @@ struct s_server * s_servg_get_min_delay_serv(struct s_server_group * servg, int 
 	struct s_array * array = servg->servs[type];
 	for(i = 0; i < s_array_len(array); ++i) {
 		serv = s_array_at(array, i);
-		if(serv) {
+		if((serv->flags & S_SERV_FLAG_IN_CONFIG) && (serv->flags & S_SERV_FLAG_ESTABLISHED)) {
 			return serv;
 		}
 	}
@@ -242,9 +243,19 @@ int s_servg_get_type(struct s_server * serv)
 	return serv->type;
 }
 
+unsigned int s_servg_get_mem(struct s_server * serv)
+{
+	return serv->mem;
+}
+
 struct s_conn * s_servg_get_conn(struct s_server * serv)
 {
 	return serv->conn;
+}
+
+struct s_server * s_servg_get_serv_from_conn(struct s_conn * conn)
+{
+	return (struct s_server *)s_net_get_udata(conn);
 }
 
 void s_servg_set_udata(struct s_server * serv, void * ud)
@@ -255,6 +266,35 @@ void s_servg_set_udata(struct s_server * serv, void * ud)
 void * s_servg_get_udata(struct s_server * serv)
 {
 	return serv->udata;
+}
+
+struct s_server * s_servg_next_active_serv(struct s_server_group * servg, int type, int * id)
+{
+	int i = *id;
+	struct s_array * array = s_servg_get_serv_array(servg, type);
+	if(!array) {
+		return NULL;
+	}
+	int len = s_array_len(array);
+	for(; i < len; ++i) {
+		struct s_server * serv = s_array_at(array, i);
+		if(serv->flags & S_SERV_FLAG_IN_CONFIG && serv->flags & S_SERV_FLAG_ESTABLISHED) {
+			*id = i + 1;
+			return serv;
+		}
+	}
+
+	return NULL;
+}
+
+struct s_server_group * s_servg_get_g(struct s_server * serv)
+{
+	return serv->servg;
+}
+
+void * s_servg_gdata(struct s_server_group * servg)
+{
+	return servg->callback.udata;
 }
 
 static S_LIST_DECLARE(g_free_serv);

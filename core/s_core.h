@@ -12,9 +12,12 @@
 #include <s_common.h>
 
 /* -- block size : 4M -- */
-#define S_CORE_BLOCK_SIZE	4194304
+#define S_CORE_BLOCK_BITS	22
+#define S_CORE_BLOCK_SIZE	(1 << 22)
 
 /* -- max file size : 4T ( 1M blocks ) -- */
+#define S_CORE_MAX_FSZ_BITS	42
+#define S_CORE_MAX_FSIZE	(1 << 42)
 #define S_CORE_BLOCK_MAX_NUM	1048576
 
 /* -- max errmsg length : 64 -- */
@@ -28,6 +31,8 @@ enum S_E_CORE_ERR {
 	
 	_S_CORE_ERR_MAX_
 };
+
+struct s_core;
 
 struct s_file_desc {
 	unsigned int file_id;
@@ -55,9 +60,11 @@ struct s_file_meta_data {
 	struct s_list __link;
 	int __nblocks;
 
+	struct s_core * core;
+
 
 	/* -- public -- */
-	struct s_string * filename;
+	struct s_string * fname;
 	struct s_file_desc fdesc;
 	struct s_file_size fsize;
 
@@ -74,20 +81,23 @@ struct s_file_meta_meta_data {
 	struct s_list __link;
 	int __nmserv;
 
+	struct s_core * core;
+
 
 	/* -- public -- */
-	struct s_string * filename;
+	struct s_string * fname;
 	struct s_file_desc fdesc;
 
 	unsigned int flags;
 
 	int nmserv;
-	unsigned short int mserver_locate[1];
+	unsigned short int mservs[1];
 };
 
 struct s_mserver {
 	struct s_hash * file_metadata;	// filename --> metadata
 	struct s_hash * file_meta_metadata; // filename --> meta-meta-data
+	struct s_hash * file_creating;	// filename --> struct s_core_mcreating
 };
 
 struct s_client {
@@ -98,15 +108,23 @@ struct s_dserver {
 	struct s_hash * file_metadata;	// filename --> metadata
 };
 
-struct s_serv_d {
-	struct s_hash * req_hash;
+struct s_core_create_param {
+	struct s_config * config;
+
+	int type;
+	int id;
+
+	/* ud = all_established(core); */
+	void * ud;
+	void * (*all_established)(struct s_core * core);
+	void(*update)(struct s_core * core, void * ud);
 };
 
 struct s_core {
 	int type;
 	int id;
 
-	unsigned int req_id;	// req id
+	unsigned short int file_id;
 
 	struct s_server_group * servg;
 
@@ -117,6 +135,8 @@ struct s_core {
 
 		struct s_dserver dserv;
 	};
+
+	struct s_core_create_param create_param;
 };
 
 #define s_core_client(c)	&((c)->client)
@@ -124,7 +144,7 @@ struct s_core {
 #define s_core_dserv(c)		&((c)->dserv)
 
 struct s_core *
-s_core_create( int type, int id, struct s_config * config );
+s_core_create( struct s_core_create_param * param );
 
 
 /*
@@ -155,6 +175,8 @@ struct s_core_metadata_param {
 	/* -- internal -- */
 	struct s_list __link;
 
+	struct s_core * core;
+
 	/* -- callback -- */
 	union {
 		void * p;
@@ -169,7 +191,7 @@ struct s_core_metadata_param {
 	char errmsg[S_CORE_MAX_ERRMSG_LENGTH];
 
 	/* -- prameter -- */
-	struct s_string * filename;
+	struct s_string * fname;
 	struct s_file_size size;	// for create file/ expand fsize
 
 	struct s_file_offset offset;

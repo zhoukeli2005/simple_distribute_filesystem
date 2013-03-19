@@ -36,7 +36,7 @@ s_net_create(int listen_port, S_NET_CALLBACK callback, void * udata);
 
 /*
  *	poll on all sockets : receive coming packets and send pedinning packets
- *
+ 
  *	@msec : wait for msec if no event comes
  */
 int
@@ -65,7 +65,7 @@ s_net_send(struct s_conn * conn, struct s_packet * pkt);
  *	rpc call
  *
  */
-void
+int
 s_net_rpc_call(struct s_conn * conn, struct s_packet * pkt, void * d, S_NET_RPC_CALLBACK callback);
 
 

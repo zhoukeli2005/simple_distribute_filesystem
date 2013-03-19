@@ -40,13 +40,13 @@ s_hash_del(struct s_hash * hash, struct s_hash_key * key);
 		__r;	\
 		})
 
-#define s_hash_del_str(hash, __str) ({	\
+#define s_hash_del_str(hash, __str)	\
+       	do {	\
 		struct s_hash_key __key;	\
 		__key.str = __str;	\
 		__key.tt = S_HASH_KEY_STR;	\
-		void * __r = s_hash_del(hash, &__key);	\
-		__r;	\
-		})
+		s_hash_del(hash, &__key);	\
+	} while(0)
 
 
 #define s_hash_set_num(hash, __num) ({	\
@@ -65,13 +65,13 @@ s_hash_del(struct s_hash * hash, struct s_hash_key * key);
 		__r;	\
 		})
 
-#define s_hash_del_num(hash, __num) ({	\
+#define s_hash_del_num(hash, __num) \
+	do {	\
 		struct s_hash_key __key;	\
 		__key.num = __num;	\
 		__key.tt = S_HASH_KEY_NUM;	\
-		void * __r = s_hash_del(hash, &__key);	\
-		__r;	\
-		})
+		s_hash_del(hash, &__key);	\
+	} while(0)
 
 #define s_hash_set_voidp(hash, voidp) ({	\
 		struct s_hash_key __key;	\

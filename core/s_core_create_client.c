@@ -4,6 +4,8 @@
 
 #define error_out()	goto label_error
 
+static void s_core_client_create_back(struct s_conn * conn, struct s_packet * pkt, void * ud);
+
 int s_core_create_file(struct s_core * core, struct s_core_metadata_param * param)
 {
 	int error = S_CORE_ERR_NOERR;
@@ -28,17 +30,8 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 		error_out();
 	}
 
-	struct s_serv_d * d = s_servg_get_udata(mserv);
-	if(!d || !d->req_hash) {
-		error = S_CORE_ERR_INTERNAL;
-		errmsg = "no serv_d or no serv_d->req_hash in mserv!";
-		
-		error_out();
-	}
-
-
 	/* 2. check param */
-	if(!param->filename) {
+	if(!param->fname) {
 		error = S_CORE_ERR_BAD_PARAM;
 		errmsg = "param : no filename provided";
 
@@ -60,36 +53,19 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 		error_out();
 	}
 
-	/* 4. save rpc */
-	unsigned int req_id;
-	if(s_packet_read_req(pkt, &req_id) < 0) {
-		error = S_CORE_ERR_INTERNAL;
-		errmsg = "req_id create error!";
-		
-		error_out();
-	}
-
-	struct s_core_metadata_param * param_saved = s_core_metadata_param_create();
+	/* 4. save rpc param */
+	struct s_core_metadata_param * param_saved = s_core_metadata_param_create(core);
 	memcpy(param_saved, param, sizeof(struct s_core_metadata_param));
 
-	void ** pp = s_hash_set_num(d->req_hash, req_id);
-	if(!pp) {
-		error = S_CORE_ERR_INTERNAL;
-		errmsg = "no mem for req_hash.set!";
-
-		error_out();
-	}
-	*pp = param_saved;
-
-	/* 5. send packet */
-	s_net_send(conn, pkt);
+	/* 5. call rpc / send packet */
+	s_net_rpc_call(conn, pkt, param_saved, &s_core_client_create_back);
 	s_packet_drop(pkt);
 
 	return 0;
 
 label_error:
 	{
-		s_log("[Error] %s", errmsg);
+		s_log("[Error] create file: %s", errmsg);
 
 		param->error = error;
 		memcpy(param->errmsg, errmsg, strlen(errmsg) + 1);
@@ -98,15 +74,25 @@ label_error:
 	return -1;
 }
 
-void s_core_client_create_back(struct s_server * serv, struct s_packet * pkt, void * ud)
+static void s_core_client_create_back(struct s_conn * conn, struct s_packet * pkt, void * ud)
 {
-	struct s_core * core = (struct s_core *)ud;
+	struct s_server * serv = s_servg_get_serv_from_conn(conn);
+	s_used(serv);
+
+	struct s_core_metadata_param * param = (struct s_core_metadata_param *)ud;
+	s_used(param);
+
+	struct s_core * core = param->core;
 	s_used(core);
 
 	int result;
 	s_packet_read(pkt, &result, int, label_error);
 
-	s_log("create back:%d", result);
+	s_log("create back:%d, %s, %u-%u", result, s_string_data_p(param->fname), param->size.high, param->size.low);
+
+	param->callback(param);
+
+	s_core_metadata_param_destroy( param );
 
 	return;
 

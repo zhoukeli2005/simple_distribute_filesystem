@@ -1,7 +1,6 @@
 #ifndef s_servg_h_
 #define s_servg_h_
 
-#include <s_server_group.h>
 #include <s_net.h>
 #include <s_packet.h>
 #include <s_list.h>
@@ -11,6 +10,7 @@
 #include <s_common.h>
 #include <s_thread.h>
 
+#include "s_server_group.h"
 #include "s_servg_pkt.h"
 
 /* ------ Serv Flags ------------ */
@@ -32,6 +32,8 @@ struct s_server {
 	// infomation
 	struct s_string * ip; 
 	int port;
+
+	unsigned int mem;
 
 	// time
 	struct timeval tv_connect;
@@ -86,6 +88,9 @@ struct s_server_group {
 	// callback
 	struct s_servg_callback callback;
 };
+
+struct s_server *
+s_servg_get_serv(struct s_server_group * servg, int type, int id);
 
 struct s_server *
 s_servg_create_serv(struct s_server_group * servg);

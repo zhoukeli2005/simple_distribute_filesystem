@@ -54,7 +54,19 @@ int main(int argc, char * argv[])
 
 	/* 4 -- create main data-structure : s_core -- */
 
-	struct s_core * core = s_core_create(type, id, config);
+	struct s_core_create_param create_param = {
+		.type = type,
+		.id = id,
+		.config = config
+	};
+
+	/* 4.1 -- if it's client, do client init -- */
+	if(type == S_SERV_TYPE_C) {
+		create_param.all_established = s_ud_client_init;
+		create_param.update = s_ud_client_update;
+	}
+
+	struct s_core * core = s_core_create(&create_param);
 
 	if(!core) {
 		s_log("s_core create error!");
@@ -63,22 +75,12 @@ int main(int argc, char * argv[])
 
 	s_log("core create ok, id:%d", id);
 
-	/* 5 -- if it's client, do user-defined-client-init */
-	void * ud = NULL;
-	if(type == S_SERV_TYPE_C) {
-		ud = s_ud_client_init(core);
-	}
-
-	/* 6 -- do main process -- */
+	/* 5 -- do main process -- */
 	while(1) {
 		/* 1. do servg stuff */
 		if(s_core_poll(core, 10) < 0) {
 			s_log("[Error] s_core_poll error!");
 			break;
-		}
-
-		if(type == S_SERV_TYPE_C) {
-//			s_ud_client_update(core, ud);
 		}
 	}
 	return 0;

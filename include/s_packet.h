@@ -11,6 +11,11 @@ s_packet_create(int size);
 struct s_packet *
 s_packet_create_from(char * p, int len);
 
+#define s_packet_easy(fun, sz)	({	\
+		struct s_packet * __pkt = s_packet_create(sz);	\
+		s_packet_set_fun(__pkt, fun);	\
+		__pkt; })
+
 
 int
 s_packet_size(struct s_packet * pkt);
