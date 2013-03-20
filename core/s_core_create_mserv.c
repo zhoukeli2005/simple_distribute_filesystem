@@ -424,10 +424,12 @@ void s_core_mserv_create_metadata(struct s_server * serv, struct s_packet * pkt,
 		goto label_rpc_ret;
 	}
 
+	s_log("[LOG] other mserv create meta-data, file:%s", s_string_data_p(fmd->fname));
+
 	struct s_mserver * mserv = s_core_mserv(core);
 
 	struct s_file_meta_data ** pp = s_hash_set_str(mserv->file_metadata, fmd->fname);
-	*p = fmd;
+	*pp = fmd;
 
 label_rpc_ret:
 	{
@@ -455,7 +457,7 @@ void s_core_mserv_create_meta_meta_data(struct s_server * serv, struct s_packet 
 	}
 
 	struct s_mserver * mserv = s_core_mserv(core);
-	struct s_file_meta_meta_data ** pp = s_hash_set_fname(mserv->file_meta_metadata, fmmd->fname);
+	struct s_file_meta_meta_data ** pp = s_hash_set_str(mserv->file_meta_metadata, fmmd->fname);
 	*pp = fmmd;
 }
 

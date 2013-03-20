@@ -36,10 +36,10 @@ struct s_packet * s_core_pkt_from_fmmd( struct s_core * core, struct s_file_meta
 	s_packet_write_string(pkt, mmd->fname);
 	s_packet_write_uint(pkt, mmd->fdesc.file_id);
 	s_packet_write_uint(pkt, mmd->fdesc.file_version);
-	s_packet_write_uint(pkt, mmd->nmserv);
+	s_packet_write_int(pkt, mmd->nmserv);
 	int i;
 	for(i = 0; i < mmd->nmserv; ++i) {
-		s_packet_write_uint(pkt, mmd->mservs[i]);
+		s_packet_write_ushort(pkt, mmd->mservs[i]);
 	}
 
 	return pkt;
@@ -49,14 +49,14 @@ struct s_file_meta_meta_data * s_core_pkt_to_fmmd(struct s_core * core, struct s
 {
 	struct s_string * fname = NULL;
 	struct s_file_desc fdesc;
-	unsigned int nmserv;
+	int nmserv;
 
 	struct s_file_meta_meta_data * fmmd = NULL;
 
 	s_packet_read(pkt, &fname, string, label_error);
 	s_packet_read(pkt, &fdesc.file_id, uint, label_error);
 	s_packet_read(pkt, &fdesc.file_version, uint, label_error);
-	s_packet_read(pkt, &nmserv, uint, label_error);
+	s_packet_read(pkt, &nmserv, int, label_error);
 
 	fmmd = s_file_meta_meta_data_create( core, nmserv );
 	if(!fmmd) {
@@ -68,7 +68,7 @@ struct s_file_meta_meta_data * s_core_pkt_to_fmmd(struct s_core * core, struct s
 	fmmd->nmserv = nmserv;
 	int i;
 	for(i = 0; i < nmserv; ++i) {
-		s_packet_read(pkt, &fmmd->mservs[i], uint, label_error);
+		s_packet_read(pkt, &fmmd->mservs[i], ushort, label_error);
 	}
 
 	return fmmd;
@@ -80,8 +80,8 @@ label_error:
 
 	if(fmmd) {
 		s_file_meta_meta_data_destroy(fmmd);
-		return NULL;
 	}
+	return NULL;
 }
 
 struct s_packet * s_core_pkt_from_fmd(struct s_core * core, struct s_file_meta_data * md)

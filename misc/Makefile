@@ -9,7 +9,7 @@ OBJS = s_misc.o
 .PHONY: all clean
 
 all: $(OBJS)
-	@mv $(OBJS) $(OUTPATH)
+	@cp $(OBJS) $(OUTPATH)
 	
 
 clean:

@@ -11,7 +11,7 @@ OBJS = s_core.o	s_core_param.o	s_core_pkt.o	\
 .PHONY: all clean
 
 all: $(OBJS)
-	@mv $(OBJS) $(OUTPATH)
+	@cp $(OBJS) $(OUTPATH)
 	
 
 clean:

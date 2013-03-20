@@ -9,7 +9,7 @@ OBJS = s_net.o s_packet.o
 .PHONY: all clean
 
 all: $(OBJS)
-	  @mv $(OBJS) $(OUTPATH)
+	  @cp $(OBJS) $(OUTPATH)
 
 clean:
 	@rm -rf $(OBJS)
