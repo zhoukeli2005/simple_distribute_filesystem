@@ -13,6 +13,10 @@
 #include "s_server_group.h"
 #include "s_servg_pkt.h"
 
+/* ------ who connect who ----- */
+#define s_do_i_conn_him(my_type, my_id, his_type, his_id)	\
+	(((my_type) > (his_type)) || (((my_type) == (his_type)) && ((my_id) > (his_id))))
+
 /* ------ Serv Flags ------------ */
 #define S_SERV_FLAG_ESTABLISHED (1 << 0)        // server is connected and established
 #define S_SERV_FLAG_IN_CONFIG   (1 << 1)        // server is in config.conf

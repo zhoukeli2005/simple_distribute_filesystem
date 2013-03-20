@@ -11,9 +11,9 @@ struct s_server;
 struct s_server_group;
 
 /* ------ Serv Types ----------- */
-#define S_SERV_TYPE_C	1	// client server
+#define S_SERV_TYPE_M	1	// meta server
 #define S_SERV_TYPE_D	2	// data server
-#define S_SERV_TYPE_M	3	// meta server
+#define S_SERV_TYPE_C	3	// client server
 
 #define S_SERV_TYPE_MAX	4
 

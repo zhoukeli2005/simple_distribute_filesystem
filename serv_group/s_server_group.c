@@ -171,9 +171,7 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 
 		// wait for connect
 		s_list_init(&serv->list);
-		if(serv->ip && serv->port &&
-			(type > servg->type || (type == servg->type && id > servg->id))
-		) {
+		if(serv->ip && serv->port && s_do_i_conn_him(servg->type, servg->id, type, id)) {
 			s_list_insert_tail(&servg->list_wait_for_conn, &serv->list);
 		}
 	}
@@ -486,7 +484,7 @@ void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)
 
 	serv->flags = S_SERV_FLAG_IN_CONFIG;
 
-	if(serv->type >= servg->type && serv->id > servg->id && serv->ip && serv->port > 0) {
+	if(serv->ip && serv->port > 0 && s_do_i_conn_him(servg->type, servg->id, serv->type, serv->id)) {
 		s_list_insert_tail(&servg->list_wait_for_conn, &serv->list);
 	}
 }
