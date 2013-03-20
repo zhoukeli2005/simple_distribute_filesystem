@@ -293,7 +293,7 @@ int s_packet_read_string(struct s_packet * pkt, struct s_string ** pstr)
 	char * p = s_packet_data_p(pkt) + pkt->pos;
 	struct s_string * str = s_string_create_len(p, len);
 	pkt->pos += len;
-	if(*pstr) {
+	if(pstr) {
 		*pstr = str;
 	}
 	return 0;

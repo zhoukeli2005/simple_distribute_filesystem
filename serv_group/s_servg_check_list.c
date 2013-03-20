@@ -1,3 +1,4 @@
+#include <s_mem.h>
 #include "s_servg.h"
 #include "s_servg_pkt.h"
 

@@ -17,6 +17,19 @@
 #define S_SERV_FLAG_ESTABLISHED (1 << 0)        // server is connected and established
 #define S_SERV_FLAG_IN_CONFIG   (1 << 1)        // server is in config.conf
 
+struct s_servg_rpc_param {
+	unsigned int req_id;
+	void * ud;
+	S_SERVG_CALLBACK callback;
+
+	int msec_timeout;
+
+	struct timeval tv_timeout;
+
+	struct s_server * serv;
+	struct s_list timeout_list;
+};
+
 struct s_server {
 	struct s_server_group * servg;
 
@@ -46,6 +59,10 @@ struct s_server {
 
 	// server can be : wait_for_conn, wait_for_identify, wait_for_ping, wait_for_pong
 	struct s_list list;
+
+	// rpc
+	struct s_hash * rpc_hash;
+	unsigned int req_id;
 
 	// user data
 	void * udata;
@@ -87,13 +104,16 @@ struct s_server_group {
 
 	// callback
 	struct s_servg_callback callback;
+
+	// rpc
+	struct s_list rpc_timeout_list;
 };
 
 struct s_server *
-s_servg_get_serv(struct s_server_group * servg, int type, int id);
+s_servg_get_serv_in_config(struct s_server_group * servg, int type, int id);
 
 struct s_server *
-s_servg_create_serv(struct s_server_group * servg);
+s_servg_create_serv(struct s_server_group * servg, int type, int id);
 
 void
 s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv);

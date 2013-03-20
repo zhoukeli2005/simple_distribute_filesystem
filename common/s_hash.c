@@ -297,6 +297,26 @@ void s_hash_del(struct s_hash * H, struct s_hash_key * key)
 	}
 }
 
+void * s_hash_next(struct s_hash * hash, int * id, struct s_hash_key * key)
+{
+	int i = s_max(0, *id);
+	struct s_hash_node * node;
+	for(; i < hash->nelem_alloc; ++i) {
+		node = ihash_at(hash, i);
+		if(node->key.tt != S_HASH_KEY_NULL) {
+			*id = i + 1;
+			if(key) {
+				*key = node->key;
+			}
+			return ival(node);
+		}
+	}
+	if(key) {
+		key->tt = S_HASH_KEY_NULL ;
+	}
+	return NULL;
+}
+
 #if 0
 int main(int argc, char * argv[])
 {

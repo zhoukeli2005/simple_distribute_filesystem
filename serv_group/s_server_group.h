@@ -17,7 +17,7 @@ struct s_server_group;
 
 #define S_SERV_TYPE_MAX	4
 
-typedef void(* S_Servg_Callback_t)(struct s_server * serv, struct s_packet * pkt, void * ud);
+typedef void(* S_SERVG_CALLBACK)(struct s_server * serv, struct s_packet * pkt, void * ud);
 
 struct s_servg_callback {
 	void * udata;
@@ -28,7 +28,7 @@ struct s_servg_callback {
 	void(*all_established) (void * udata);
 
 
-	S_Servg_Callback_t handle_msg[S_SERV_TYPE_MAX][S_PKT_TYPE_MAX_];
+	S_SERVG_CALLBACK handle_msg[S_SERV_TYPE_MAX][S_PKT_TYPE_MAX_];
 };
 
 
@@ -51,7 +51,7 @@ s_servg_create(int type, int id, struct s_servg_callback * callback);
  *	@param callback :
  */
 int
-s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_Servg_Callback_t callback);
+s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_SERVG_CALLBACK callback);
 
 /*
  *	s_servg_init_config
@@ -84,6 +84,9 @@ s_servg_poll(struct s_server_group * servg, int msec);
 struct s_server *
 s_servg_next_active_serv(struct s_server_group * servg, int type, int * id);
 
+struct s_server *
+s_servg_get_active_serv(struct s_server_group * servg, int type, int id);
+
 struct s_array *
 s_servg_get_serv_array(struct s_server_group * servg, int type);
 
@@ -95,11 +98,13 @@ s_servg_get_min_delay_serv(struct s_server_group * servg, int type);
  *	get conn from server & get server from conn
  *
  */
+/*
 struct s_conn *
 s_servg_get_conn(struct s_server * serv);
 
 struct s_server *
 s_servg_get_serv_from_conn(struct s_conn * conn);
+*/
 
 /*
  *	get information
@@ -131,7 +136,20 @@ s_servg_get_g(struct s_server * serv);
 void *
 s_servg_gdata(struct s_server_group * servg);
 
-#define s_servg_gdata_from_conn(conn) s_servg_gdata(s_servg_get_g(s_servg_get_serv_from_conn(conn)))
+#define s_servg_gdata_from_serv(serv)	s_servg_gdata(s_servg_get_g(serv))
+
+/*
+ *	rpc
+ *
+ */
+int
+s_servg_rpc_call(struct s_server * serv, struct s_packet * pkt, void * ud, S_SERVG_CALLBACK callback, int msec_timeout);
+
+void
+s_servg_rpc_ret(struct s_server * serv, unsigned int req_id, struct s_packet * pkt);
+
+#define s_servg_send(serv, pkt) 	\
+	s_servg_rpc_call(serv, pkt, NULL, NULL, -1)
 
 #endif
 

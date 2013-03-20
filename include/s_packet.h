@@ -108,6 +108,8 @@ s_packet_write_string(struct s_packet * pkt, struct s_string * s);
 #define s_packet_size_for_string(s)	(2 + s_string_len(s))
 #define s_packet_size_for_int(i)	4
 #define s_packet_size_for_uint(u)	4
+#define s_packet_size_for_short(u)	2
+#define s_packet_size_for_ushort(u)	2
 
 /*
  *	Increase Reference Count

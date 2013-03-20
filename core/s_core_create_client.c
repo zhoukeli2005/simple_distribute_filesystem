@@ -1,10 +1,10 @@
 #include "s_core.h"
 #include "s_core_create.h"
-#include "s_core_create_pkt.h"
+#include "s_core_pkt.h"
 
 #define error_out()	goto label_error
 
-static void s_core_client_create_back(struct s_conn * conn, struct s_packet * pkt, void * ud);
+static void s_core_client_create_back(struct s_server * serv, struct s_packet * pkt, void * ud);
 
 int s_core_create_file(struct s_core * core, struct s_core_metadata_param * param)
 {
@@ -18,14 +18,6 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 	if(!mserv) {
 		error = S_CORE_ERR_INTERNAL;
 		errmsg = "no meta-server connected!";
-
-		error_out();
-	}
-
-	struct s_conn * conn = s_servg_get_conn(mserv);
-	if(!conn) {
-		error = S_CORE_ERR_INTERNAL;
-		errmsg = "meta-serv has no connection!";
 
 		error_out();
 	}
@@ -45,7 +37,7 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 	}
 
 	/* 3. create packet */
-	struct s_packet * pkt = s_core_create_pkt_create(core, param);
+	struct s_packet * pkt = s_core_pkt_from_mdp(core, param);
 	if(!pkt) {
 		error = S_CORE_ERR_INTERNAL;
 		errmsg = "no mem for create_pkt!";
@@ -58,7 +50,7 @@ int s_core_create_file(struct s_core * core, struct s_core_metadata_param * para
 	memcpy(param_saved, param, sizeof(struct s_core_metadata_param));
 
 	/* 5. call rpc / send packet */
-	s_net_rpc_call(conn, pkt, param_saved, &s_core_client_create_back);
+	s_servg_rpc_call(mserv, pkt, param_saved, &s_core_client_create_back, -1);
 	s_packet_drop(pkt);
 
 	return 0;
@@ -74,29 +66,44 @@ label_error:
 	return -1;
 }
 
-static void s_core_client_create_back(struct s_conn * conn, struct s_packet * pkt, void * ud)
+static void s_core_client_create_back(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
-	struct s_server * serv = s_servg_get_serv_from_conn(conn);
-	s_used(serv);
-
 	struct s_core_metadata_param * param = (struct s_core_metadata_param *)ud;
 	s_used(param);
 
 	struct s_core * core = param->core;
 	s_used(core);
 
-	int result;
-	s_packet_read(pkt, &result, int, label_error);
+	param->error = S_CORE_ERR_NOERR;
+	const char * errmsg = NULL;
 
-	s_log("create back:%d, %s, %u-%u", result, s_string_data_p(param->fname), param->size.high, param->size.low);
+	if(!pkt) {
+		s_log("[Warning] create file:%s, timeout or conn broken!", s_string_data_p(param->fname));
+		param->error = S_CORE_ERR_INTERNAL;
+		errmsg = "timeout or conn-broken";
+	} else {
+		int result;
+		if(s_packet_read_int(pkt, &result) < 0) {
+			param->error = S_CORE_ERR_INTERNAL;
+			errmsg = "rpc return error";
+		}
+		if(result <= 0) {
+			param->error = S_CORE_ERR_INTERNAL;
+			errmsg = "create failed";
+		}
+	}
+
+	if(errmsg) {
+		s_log("[lOG] create(%s) error:%s", s_string_data_p(param->fname), errmsg);
+		memcpy(param->errmsg, errmsg, strlen(errmsg) + 1);
+	} else {
+		s_log("[LOG] create(%s) ok", s_string_data_p(param->fname));
+	}
 
 	param->callback(param);
 
 	s_core_metadata_param_destroy( param );
 
-	return;
-
-label_error:
 	return;
 }
 

@@ -1,5 +1,6 @@
-#include <s_server_group.h>
+#include "s_server_group.h"
 #include <s_mem.h>
+#include <s_hash.h>
 #include <s_ipc.h>
 #include "s_servg.h"
 
@@ -32,10 +33,12 @@ struct s_server_group * s_servg_create(int type, int id, struct s_servg_callback
 		memcpy(&servg->callback, callback, sizeof(struct s_servg_callback));
 	}
 
+	s_list_init(&servg->rpc_timeout_list);
+
 	return servg;
 }
 
-int s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_Servg_Callback_t callback)
+int s_servg_register(struct s_server_group * servg, int serv_type, int fun, S_SERVG_CALLBACK callback)
 {
 	if(serv_type < 0 || serv_type >= S_SERV_TYPE_MAX) {
 		s_log("[Error] servg_register invalid serv_type:%d", serv_type);
@@ -137,6 +140,9 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 		serv->type = type;
 		serv->id = id;
 
+		serv->req_id = 1;
+		serv->rpc_hash = NULL;
+
 		// information
 		if(ip) {
 			s_string_grab(ip);
@@ -189,21 +195,57 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 
 int s_servg_poll(struct s_server_group * servg, int msec)
 {
+	/* --- check server connection / reconnection / ping-pong --- */
 	if(s_servg_check_list(servg) < 0) {
 		return -1;
 	}
+
+	/* --- check rpc timeout --- */
+	struct timeval tv_now;
+	gettimeofday(&tv_now, NULL);
+	struct s_list * p, *tmp;
+	s_list_foreach_safe(p, tmp, &servg->rpc_timeout_list) {
+		struct s_servg_rpc_param * param = s_list_entry(p, struct s_servg_rpc_param, timeout_list);
+		if(timercmp(&tv_now, &param->tv_timeout, >=)) {
+			// timeout
+			param->callback(param->serv, NULL, param->ud);
+
+			s_list_del(p);
+
+			s_hash_del_num(param->serv->rpc_hash, param->req_id);
+			s_free(param);
+		}
+	}
+
+	/* --- do net poll --- */
 	return s_net_poll(servg->net, msec);
 }
 
-struct s_server * s_servg_get_serv(struct s_server_group * servg, int type, int id)
+static struct s_server * iget_serv(struct s_server_group * servg, int type, int id)
 {
 	if(type >= 0 && type < S_SERV_TYPE_MAX) {
 		struct s_server * serv = s_array_at(servg->servs[type], id);
-		if(serv && serv->flags & S_SERV_FLAG_IN_CONFIG) {
-			return serv;
-		}
+		return serv;
 	}
 	s_log("invalid param, type:%d, id:%d", type, id);
+	return NULL;
+}
+
+struct s_server * s_servg_get_serv_in_config(struct s_server_group * servg, int type, int id)
+{
+	struct s_server * serv = iget_serv(servg, type, id);
+	if(serv && serv->flags & S_SERV_FLAG_IN_CONFIG) {
+		return serv;
+	}
+	return NULL;
+}
+
+struct s_server * s_servg_get_active_serv(struct s_server_group * servg, int type, int id)
+{
+	struct s_server * serv = iget_serv(servg, type, id);
+	if(serv && (serv->flags & S_SERV_FLAG_ESTABLISHED)) {
+		return serv;
+	}
 	return NULL;
 }
 
@@ -248,6 +290,7 @@ unsigned int s_servg_get_mem(struct s_server * serv)
 	return serv->mem;
 }
 
+/*
 struct s_conn * s_servg_get_conn(struct s_server * serv)
 {
 	return serv->conn;
@@ -256,7 +299,7 @@ struct s_conn * s_servg_get_conn(struct s_server * serv)
 struct s_server * s_servg_get_serv_from_conn(struct s_conn * conn)
 {
 	return (struct s_server *)s_net_get_udata(conn);
-}
+}*/
 
 void s_servg_set_udata(struct s_server * serv, void * ud)
 {
@@ -270,7 +313,7 @@ void * s_servg_get_udata(struct s_server * serv)
 
 struct s_server * s_servg_next_active_serv(struct s_server_group * servg, int type, int * id)
 {
-	int i = *id;
+	int i = s_max(0, *id);
 	struct s_array * array = s_servg_get_serv_array(servg, type);
 	if(!array) {
 		return NULL;
@@ -297,10 +340,111 @@ void * s_servg_gdata(struct s_server_group * servg)
 	return servg->callback.udata;
 }
 
+int s_servg_rpc_call(struct s_server * serv, struct s_packet * pkt, void * ud, S_SERVG_CALLBACK callback, int msec_timeout)
+{
+	if(!callback) {
+		// normal send
+		s_net_send(serv->conn, pkt);
+		return 0;
+	}
+	struct s_server_group * servg = serv->servg;
+
+	unsigned int req_id = serv->req_id++;
+	if(s_packet_set_req(pkt, req_id) < 0) {
+		s_log("[Warning] rpc_call : write req(%u) failed!", req_id);
+		return -1;
+	}
+
+	struct s_servg_rpc_param * param = s_malloc(struct s_servg_rpc_param, 1);
+	if(!param) {
+		s_log("[Error] no mem for rpc_param!");
+		return -1;
+	}
+	param->req_id = req_id;
+	param->ud = ud;
+	param->callback = callback;
+	param->msec_timeout = msec_timeout;
+	param->serv = serv;
+
+	s_list_init(&param->timeout_list);
+
+	// add timeout
+	if(msec_timeout > 0) {
+		gettimeofday(&param->tv_timeout, NULL);
+		param->tv_timeout.tv_usec += msec_timeout * 1000;
+		while(param->tv_timeout.tv_usec > 1000000) {
+			param->tv_timeout.tv_sec++;
+			param->tv_timeout.tv_usec -= 1000000;
+		}
+
+		struct s_list * p;
+		s_list_foreach(p, &servg->rpc_timeout_list) {
+			struct s_servg_rpc_param * next_param = s_list_entry(p, struct s_servg_rpc_param, timeout_list);
+			if(timercmp(&next_param->tv_timeout, &param->tv_timeout, >=)) {
+				break;
+			}
+		}
+		s_list_insert_tail(p, &param->timeout_list);
+	}
+
+	// add to rpc_hash
+	struct s_servg_rpc_param ** pp = s_hash_set_num(serv->rpc_hash, req_id);
+	*pp = param;
+
+	// send packet
+	s_net_send(serv->conn, pkt);
+	return 0;
+}
+
+void s_servg_rpc_ret(struct s_server * serv, unsigned int req_id, struct s_packet * pkt)
+{
+	s_packet_set_fun(pkt, S_PKT_TYPE_RPC_BACK_);
+	s_packet_set_req(pkt, req_id);
+
+	s_net_send(serv->conn, pkt);
+}
+
 static S_LIST_DECLARE(g_free_serv);
 
-struct s_server * s_servg_create_serv(struct s_server_group * servg)
+struct s_server * s_servg_create_serv(struct s_server_group * servg, int type, int id)
 {
+	struct s_array * array = s_servg_get_serv_array(servg, type);
+	if(!array) {
+		return NULL;
+	}
+
+	if(id > 0) {
+		iinit_serv(array, id);
+		struct s_server * serv = s_array_at(array, id);
+		serv->flags = 0;
+		serv->id = id;
+		serv->type = type;
+		serv->servg = servg;
+		return serv;
+	}
+
+	int i;
+	int len = s_array_len(array);
+	struct s_server * serv = NULL;
+	for(i = 0; i < len; ++i) {
+		struct s_server * serv = s_array_at(array, i);
+		if(!(serv->flags & S_SERV_FLAG_IN_CONFIG) && !(serv->flags & S_SERV_FLAG_ESTABLISHED)) {
+			id = i;
+			break;
+		}
+	}
+	if(!serv) {
+		id = len;
+		serv = s_array_push(array);
+	}
+	memset(serv, 0, sizeof(struct s_server));
+	serv->id = id;
+	serv->type = type;
+	serv->servg = servg;
+	s_list_init(&serv->list);
+	return serv;
+
+	/*
 	struct s_server * serv;
 	if(!s_list_empty(&g_free_serv)) {
 		struct s_list * p = s_list_first(&g_free_serv);
@@ -317,6 +461,7 @@ struct s_server * s_servg_create_serv(struct s_server_group * servg)
 	serv->servg = servg;
 
 	return serv;
+	*/
 }
 
 void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)
@@ -336,7 +481,6 @@ void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)
 	if((serv->flags & S_SERV_FLAG_IN_CONFIG) == 0) {
 		// not in config.conf, just free
 		serv->flags = 0;
-		s_list_insert(&g_free_serv, &serv->list);
 		return;
 	}
 
@@ -350,6 +494,12 @@ void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)
 static int iinit_serv(struct s_array * array, int id)
 {
 	int len = s_array_len(array);
+	if(id < len) {
+		struct s_server * serv = s_array_at(array, id);
+		serv->flags = S_SERV_FLAG_IN_CONFIG;
+		return 0;
+	}
+
 	for(; len < id; ++len) {
 		struct s_server * serv = s_array_push(array);
 		if(!serv) {

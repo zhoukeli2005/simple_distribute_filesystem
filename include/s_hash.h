@@ -97,6 +97,12 @@ s_hash_del(struct s_hash * hash, struct s_hash_key * key);
 		__r;	\
 		})
 
+/*
+ *	iterator vals
+ *
+ */
+void * s_hash_next(struct s_hash * hash, int * id, struct s_hash_key * key);
+
 enum S_E_HASH_KEY {
 	S_HASH_KEY_STR = 1,
 	S_HASH_KEY_NUM,

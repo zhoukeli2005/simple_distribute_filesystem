@@ -55,6 +55,10 @@ struct s_file_offset {
 	unsigned int high;
 };
 
+struct s_block_locate {
+	unsigned short int locate[2];
+};
+
 struct s_file_meta_data {
 	/* -- internal -- */
 	struct s_list __link;
@@ -69,7 +73,7 @@ struct s_file_meta_data {
 	struct s_file_size fsize;
 
 	int nblocks;
-	unsigned short int block_locate[1];
+	struct s_block_locate blocks[1];
 };
 
 #define S_FILE_MMD_FLAG_DELETED		1
@@ -102,6 +106,10 @@ struct s_mserver {
 
 struct s_client {
 	int __dummy;
+};
+
+struct s_dserv_file {
+	struct s_file_meta_data * file_metadata;
 };
 
 struct s_dserver {

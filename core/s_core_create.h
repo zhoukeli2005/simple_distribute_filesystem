@@ -35,8 +35,10 @@ struct s_core_mcreating {
 	struct s_core * core;
 
 	struct s_string * fname;
-	struct s_server * client;
 	struct s_file_size size;
+
+	int client_id;
+	unsigned int req_id;
 
 	int ncheck;
 };
@@ -48,19 +50,10 @@ void
 s_core_mserv_create_check_auth( struct s_server * serv, struct s_packet * pkt, void * ud );
 
 void
-s_core_mserv_create_check_auth_back( struct s_server * serv, struct s_packet * pkt, void * ud );
-
-void
-s_core_mserv_create_cancel( struct s_server * serv, struct s_packet * pkt, void * ud );
-
-void
-s_core_mserv_create_decide( struct s_server * serv, struct s_packet * pkt, void * ud );
-
-void
 s_core_mserv_create_metadata( struct s_server * serv, struct s_packet * pkt, void * ud );
 
 void
-s_core_mserv_create_md_accept( struct s_server * serv, struct s_packet * pkt, void * ud );
+s_core_mserv_create_meta_meta_data( struct s_server * serv, struct s_packet * pkt, void * ud );
 
 // dserv
 void

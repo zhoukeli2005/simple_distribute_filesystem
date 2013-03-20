@@ -27,13 +27,6 @@ struct packet_node {
 	int total;
 };
 
-struct irpc_param {
-	unsigned int req_id;
-
-	void * ud;
-	S_NET_RPC_CALLBACK callback;
-};
-
 #define DEFAULT_READ_BUFFER_SZ	1024
 
 #define DEFAULT_EPOLL_EVENTS_SZ	1024
@@ -61,10 +54,6 @@ struct s_conn {
 
 	// udata
 	void * udata;
-
-	// rpc
-	unsigned int req_id;
-	struct s_hash * rpc_hash;
 };
 
 struct s_net {
@@ -223,22 +212,8 @@ int s_net_poll(struct s_net * net, int msec)
 			}
 			struct s_packet * pkt = inext_packet(net, conn);
 			while(pkt) {
-				unsigned int fun = s_packet_get_fun(pkt);
-				// 1. it's a rpc back packet
-				if(fun == S_PKT_TYPE_RPC_BACK_) {
-					unsigned int req = s_packet_get_req(pkt);
-					struct irpc_param * param = s_hash_get_num(conn->rpc_hash, req);
-					if(param) {
-						param->callback(conn, pkt, param->ud);
-						s_hash_del_num(conn->rpc_hash, req);
-					} else {
-						s_log("[Warning] rpc request back, miss rpc_param(id:%u)", req);
-					}
-				} else {
-				// 2. it's a normal packet
-					if(net->callback) {
-						net->callback(conn, pkt, net->udata);
-					}
+				if(net->callback) {
+					net->callback(conn, pkt, net->udata);
 				}
 				
 				s_packet_drop(pkt);
@@ -432,13 +407,6 @@ static struct s_conn * iget_conn(struct s_net * net)
 	conn->port = 0;
 	conn->udata = NULL;
 
-	conn->req_id = 1;
-	conn->rpc_hash = s_hash_create(sizeof(struct irpc_param), 16);
-	if(!conn->rpc_hash) {
-		s_log("no mem for conn->rpc_hash");
-		return NULL;
-	}
-
 	s_list_init(&conn->link);
 
 
@@ -469,9 +437,6 @@ static struct s_conn * iget_conn(struct s_net * net)
 
 static void iput_conn(struct s_net * net, struct s_conn * conn)
 {
-	if(conn->rpc_hash) {
-		s_hash_destroy(conn->rpc_hash);
-	}
 	s_list_insert(&net->conn_list, &conn->link);
 	net->nconn_free++;
 }
@@ -633,42 +598,5 @@ again:
 	}
 out:
 	return;
-}
-
-/* -------------- RPC --------------- */
-int s_net_rpc_call(struct s_conn * conn, struct s_packet * pkt, void * d, S_NET_RPC_CALLBACK callback)
-{
-	if(!callback) {
-		s_log("[Warning] s_net_rpc_call : missing callback!");
-		s_net_send(conn, pkt);
-		return 0;
-	}
-
-	unsigned int req_id = conn->req_id++;
-
-	struct irpc_param * param = s_hash_set_num(conn->rpc_hash, req_id);
-	if(!param) {
-		s_log("[Error] no mem!");
-		return -1;
-	}
-	param->req_id = req_id++;
-	if(s_packet_set_req(pkt, param->req_id) < 0) {
-		s_log("[Error] s_packet_set_req failed:%u", param->req_id);
-		return -1;
-	}
-	param->ud = d;
-	param->callback = callback;
-
-	s_net_send(conn, pkt);
-
-	return 0;
-}
-
-void s_net_rpc_ret(struct s_conn * conn, unsigned int req_id, struct s_packet * pkt)
-{
-	s_packet_set_fun(pkt, S_PKT_TYPE_RPC_BACK_);
-	s_packet_set_req(pkt, req_id);
-
-	s_net_send(conn, pkt);
 }
 

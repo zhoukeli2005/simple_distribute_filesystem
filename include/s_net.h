@@ -10,7 +10,6 @@ struct s_packet;
 #define S_NET_CONN_CLOSING		(struct s_packet *)(2)
 
 typedef void(*S_NET_CALLBACK)(struct s_conn * conn, struct s_packet * pkt, void * udata);
-typedef void(*S_NET_RPC_CALLBACK)(struct s_conn * conn, struct s_packet * pkt, void * udata);
 
 /*
  *	create a net manager
@@ -62,30 +61,28 @@ s_net_send(struct s_conn * conn, struct s_packet * pkt);
 
 
 /*
- *	rpc call
- *
- */
-int
-s_net_rpc_call(struct s_conn * conn, struct s_packet * pkt, void * d, S_NET_RPC_CALLBACK callback);
-
-
-void
-s_net_rpc_ret(struct s_conn * conn, unsigned int req_id, struct s_packet * pkt);
-
-
-/*
  *	close a connection
  *
  */
 void
 s_net_close(struct s_conn * conn);
 
+
+/*
+ *	information
+ *
+ */
 const char *
 s_net_ip(struct s_conn * conn);
 
 int
 s_net_port(struct s_conn * conn);
 
+
+/*
+ *	user-data
+ *
+ */
 void
 s_net_set_udata(struct s_conn * conn, void * d);
 
@@ -93,3 +90,4 @@ void *
 s_net_get_udata(struct s_conn * conn);
 
 #endif
+

@@ -1,3 +1,5 @@
+#include <s_mem.h>
+#include <s_hash.h>
 #include "s_servg.h"
 #include "s_servg_pkt.h"
 
@@ -27,8 +29,26 @@ static void iwhen_conn_closed(struct s_server_group * servg, struct s_conn * con
 	s_log("[LOG] conn closed! type:%d, id:%d", serv->type, serv->id);
 	serv->conn = NULL;
 
-	if(servg->callback.serv_closed) {
-		servg->callback.serv_closed(serv, servg->callback.udata);
+	if(serv->flags & S_SERV_FLAG_ESTABLISHED) {
+
+		// release all rpc-param s
+		{
+			int id = -1;
+			struct s_servg_rpc_param ** pparam = s_hash_next(serv->rpc_hash, &id, NULL);
+			while(pparam) {
+				struct s_servg_rpc_param * param = *pparam;
+				param->callback(serv, NULL, param->ud);
+
+				s_free(param);
+
+				pparam = s_hash_next(serv->rpc_hash, &id, NULL);
+			}
+		}
+		s_hash_destroy(serv->rpc_hash);
+
+		if(servg->callback.serv_closed) {
+			servg->callback.serv_closed(serv, servg->callback.udata);
+		}
 	}
 
 	s_servg_reset_serv(servg, serv);
@@ -58,17 +78,16 @@ void ihandle_identify(struct s_server_group * servg, struct s_conn * conn, struc
 	s_packet_read(pkt, &id, int, label_read_error);
 
 	unsigned int mem;
-	s_packet_read(pkt, &mem, int, label_read_error);
+	s_packet_read(pkt, &mem, uint, label_read_error);
 
-	struct s_server * serv = s_servg_get_serv(servg, type, id);
+	struct s_server * serv = s_servg_get_serv_in_config(servg, type, id);
 	if(!serv) {
 		s_log("[LOG] a server comes, not in config.conf");
-		serv = s_servg_create_serv(servg);
+		/* if id == 0, id is auto-assigned */
+		serv = s_servg_create_serv(servg, type, id);
 		if(!serv) {
 			goto label_auth_error;
 		}
-		serv->id = id;
-		serv->type = type;
 	}
 
 	if(serv->flags & S_SERV_FLAG_ESTABLISHED) {
@@ -86,6 +105,10 @@ void ihandle_identify(struct s_server_group * servg, struct s_conn * conn, struc
 
 	// set flags
 	serv->flags |= S_SERV_FLAG_ESTABLISHED;
+
+	// init rpc
+	serv->req_id = 1;
+	serv->rpc_hash = s_hash_create(sizeof(struct s_servg_rpc_param), 16);
 
 	// set time
 	gettimeofday(&serv->tv_connect, NULL);
@@ -134,12 +157,16 @@ static void ihandle_identify_back(struct s_server_group * servg, struct s_server
 	s_packet_read(pkt, &ret, int, label_read_error);
 
 	unsigned int mem;
-	s_packet_read(pkt, &mem, int, label_read_error);
+	s_packet_read(pkt, &mem, uint, label_read_error);
 
 	if(ret == 1) {
 		s_log("[LOG] identify ok!");
 
 		serv->mem = mem;
+
+		// init rpc
+		serv->req_id = 1;
+		serv->rpc_hash = s_hash_create(sizeof(struct s_servg_rpc_param), 16);
 
 		// move to `wait_for_ping list`
 		s_list_del(&serv->list);
@@ -215,7 +242,7 @@ static void ihandle_pong(struct s_server_group * servg, struct s_server * serv, 
 
 	serv->tv_receive_pong = tv_now;
 
-	s_log("roundup-time: %u, %u, mem:%u", (unsigned int)(serv->tv_delay.tv_sec), (unsigned int)(serv->tv_delay.tv_usec), mem);
+//	s_log("roundup-time: %u, %u, mem:%u", (unsigned int)(serv->tv_delay.tv_sec), (unsigned int)(serv->tv_delay.tv_usec), mem);
 
 	// move to `wait for ping list`
 	s_list_del(&serv->list);
@@ -226,6 +253,23 @@ static void ihandle_pong(struct s_server_group * servg, struct s_server * serv, 
 label_read_error:
 
 	return;
+}
+
+static void ihandle_rpc_back(struct s_server_group * servg, struct s_server * serv, struct s_packet * pkt)
+{
+	unsigned int req = s_packet_get_req(pkt);
+	struct s_servg_rpc_param ** pp = s_hash_get_num(serv->rpc_hash, req);
+	if(!pp) {
+		s_log("[Warning] no rpc_param for %u", req);
+		return;
+	}
+	struct s_servg_rpc_param * param = *pp;
+	param->callback(serv, pkt, param->ud);
+
+	s_list_del(&param->timeout_list);
+
+	s_free(param);
+	s_hash_del_num(serv->rpc_hash, req);
 }
 
 void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
@@ -257,6 +301,10 @@ void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
 	unsigned int fun = s_packet_get_fun(pkt);
 
 	switch(fun) {
+		case S_PKT_TYPE_RPC_BACK_:
+			ihandle_rpc_back(servg, serv, pkt);
+			return;
+
 		case S_PKT_TYPE_IDENTIFY_BACK:
 			ihandle_identify_back(servg, serv, pkt);
 			return;

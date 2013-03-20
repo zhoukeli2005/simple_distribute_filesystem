@@ -8,7 +8,7 @@
 
 int s_core_fsize_to_block_num(struct s_file_size * size)
 {
-	unsigned int bits = S_SZ_OF_UINT - S_CORE_BLOCK_BITS;
+	unsigned long bits = S_SZ_OF_UINT - S_CORE_BLOCK_BITS;
 	unsigned int num = S_HIGH_BITS(size->low, bits);
 	if(S_SZ_OF_UINT < S_CORE_MAX_FSZ_BITS) {
 		unsigned int high_bits = S_CORE_MAX_FSZ_BITS - S_SZ_OF_UINT;

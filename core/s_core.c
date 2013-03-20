@@ -83,18 +83,14 @@ static void init_mserv( struct s_core * core )
 	struct s_mserver * mserv = s_core_mserv(core);
 	mserv->file_creating = s_hash_create(sizeof(struct s_core_mcreating), 16);
 	mserv->file_metadata = s_hash_create(sizeof(struct s_file_meta_data), 16);
-	mserv->file_meta_metadata = s_hash_create(sizeof(struct s_file_meta_meta_data), 16);
-
+	mserv->file_meta_metadata = s_hash_create(sizeof(struct s_file_meta_meta_data *), 16);
 
 	// client rpc
 	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_CREATE, &s_core_mserv_create);
 	// mserv rpc
-	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_CHECK_AUTH, &s_core_mserv_create_check_auth);
-	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_DECIDE, &s_core_mserv_create_decide);
-	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_METADATA, &s_core_mserv_create_metadata);
-	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_METADATA_ACCEPT, &s_core_mserv_create_md_accept);
-	// dserv rpc
-	s_servg_register(core->servg, S_SERV_TYPE_D, S_PKT_TYPE_CREATE_METADATA_ACCEPT, &s_core_mserv_create_md_accept);
+	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_CHECK_AUTH,	&s_core_mserv_create_check_auth);
+	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_METADATA,	&s_core_mserv_create_metadata);
+	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_META_META_DATA,	&s_core_mserv_create_meta_meta_data);
 }
 
 static void init_dserv( struct s_core * core )

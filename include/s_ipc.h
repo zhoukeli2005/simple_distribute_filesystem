@@ -20,7 +20,6 @@ enum S_ENUM_PKT_TYPE {
 		S_PKT_TYPE_CREATE_CHECK_AUTH,			// mserv --> other mserv
 		S_PKT_TYPE_CREATE_METADATA,			// main mserv --> data serv / mserv / slave mserv
 		S_PKT_TYPE_CREATE_META_META_DATA,		// main mserv --> data serv / mserv / slave mserv
-		S_PKT_TYPE_CREATE_METADATA_ACCEPT,		// dserv --> main mserv
 
 	// expand file size
 

@@ -7,7 +7,7 @@ static void create_back(void * udata)
 void * s_ud_client_init(struct s_core * core)
 {
 	struct s_core_metadata_param param;
-	param.filename = s_string_create("test_file.xx");
+	param.fname = s_string_create("test_file.xx");
 	param.callback = &create_back;
 
 	param.size.high = 0;
