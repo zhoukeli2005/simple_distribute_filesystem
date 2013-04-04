@@ -1,6 +1,10 @@
 #include "s_core.h"
 #include "s_core_param.h"
 #include "s_core_create.h"
+#include "s_core_glock.h"
+#include "s_core_dserv.h"
+#include "s_core_lock.h"
+
 #include <s_mem.h>
 
 static struct s_core g_core;
@@ -70,12 +74,17 @@ int s_core_poll(struct s_core * core, int msec)
 	}
 
 	// XXX do something ...
+	if(core->create_param.update) {
+		core->create_param.update(core, core->create_param.ud);
+	}
 
 	return 0;
 }
 
 static void init_client( struct s_core * core )
 {
+	struct s_client * cl = s_core_client(core);
+	cl->locks = s_hash_create(sizeof(void *), 16);
 }
 
 static void init_mserv( struct s_core * core )
@@ -85,8 +94,18 @@ static void init_mserv( struct s_core * core )
 	mserv->file_metadata = s_hash_create(sizeof(struct s_file_meta_data), 16);
 	mserv->file_meta_metadata = s_hash_create(sizeof(struct s_file_meta_meta_data *), 16);
 
+	mserv->glock = 0;
+	mserv->glock_elems = s_hash_create(sizeof(struct s_glock_elem), 16);
+
+	/* ------ glock ---------- */
+	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_GLOBAL_LOCK, &s_core_mserv_glock);
+	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_GLOBAL_UNLOCK, &s_core_mserv_glock_unlock);
+
+
+	/* ------- create file --------- */
 	// client rpc
 	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_CREATE, &s_core_mserv_create);
+
 	// mserv rpc
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_CHECK_AUTH,	&s_core_mserv_create_check_auth);
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_METADATA,	&s_core_mserv_create_metadata);
@@ -95,7 +114,25 @@ static void init_mserv( struct s_core * core )
 
 static void init_dserv( struct s_core * core )
 {
+	struct s_dserver * dserv = s_core_dserv(core);
+	dserv->waiting_data = s_hash_create(sizeof(struct s_core_wait_data), 16);
+
+	// lock
+	dserv->locks = s_hash_create(sizeof(void *), 16);
+	s_list_init(&dserv->lock_sent);
+	s_list_init(&dserv->lock_waiting);
+
+	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_LOCK_START, &s_core_dserv_lock);
+	s_servg_register(core->servg, S_SERV_TYPE_D, S_PKT_TYPE_LOCK_NEXT, &s_core_dserv_lock);
+	s_servg_register(core->servg, S_SERV_TYPE_D, S_PKT_TYPE_LOCK_UNLOCK, &s_core_dserv_lock_unlock);
+
+	
+	/* ------ create file ------ */
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_CREATE_METADATA, &s_core_dserv_create_metadata);
+
+	/* ------ write data ------- */
+	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_PUSH_DATA, &s_core_dserv_push_data);
+	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_WRITE, &s_core_dserv_write);
 }
 
 static void when_serv_established(struct s_server * serv, void * ud)

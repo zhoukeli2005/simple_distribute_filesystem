@@ -14,7 +14,16 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #define MAX_THREAD	256
+
+struct s_id {
+	int x;
+	int y;
+};
 
 /* - bit - */
 #define S_SETBIT(f, b)		f |= (b)

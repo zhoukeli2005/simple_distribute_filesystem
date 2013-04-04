@@ -44,7 +44,9 @@ static void iwhen_conn_closed(struct s_server_group * servg, struct s_conn * con
 				pparam = s_hash_next(serv->rpc_hash, &id, NULL);
 			}
 		}
-		s_hash_destroy(serv->rpc_hash);
+		if(serv->rpc_hash) {
+			s_hash_destroy(serv->rpc_hash);
+		}
 
 		if(servg->callback.serv_closed) {
 			servg->callback.serv_closed(serv, servg->callback.udata);

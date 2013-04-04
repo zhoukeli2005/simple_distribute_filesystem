@@ -22,6 +22,21 @@ enum S_ENUM_PKT_TYPE {
 		S_PKT_TYPE_CREATE_META_META_DATA,		// main mserv --> data serv / mserv / slave mserv
 
 	// expand file size
+		// xxx....
+
+	// write data
+		S_PKT_TYPE_PUSH_DATA,
+		S_PKT_TYPE_WRITE,
+
+	// global lock
+		S_PKT_TYPE_GLOBAL_LOCK,
+		S_PKT_TYPE_GLOBAL_UNLOCK,
+
+	// lock
+		S_PKT_TYPE_LOCK_START,				// client --> dserv
+		S_PKT_TYPE_LOCK_NEXT,				// dserv --> dserv
+		S_PKT_TYPE_LOCK_UNLOCK,				// dserv --> dserv
+		S_PKT_TYPE_LOCK_END,				// dserv --> client
 
 
 	// end

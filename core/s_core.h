@@ -98,22 +98,47 @@ struct s_file_meta_meta_data {
 	unsigned short int mservs[1];
 };
 
+/* ----- Global Lock for test ---------- */
+struct s_glock_elem {
+	int client_id;
+	unsigned int req_id;
+
+	unsigned int lock;
+
+	int is_waiting;
+};
+
 struct s_mserver {
 	struct s_hash * file_metadata;	// filename --> metadata
 	struct s_hash * file_meta_metadata; // filename --> meta-meta-data
 	struct s_hash * file_creating;	// filename --> struct s_core_mcreating
+
+	// global lock
+	unsigned int glock;
+	struct s_hash * glock_elems;
 };
 
 struct s_client {
 	int __dummy;
+
+	struct s_hash * locks;
 };
 
-struct s_dserv_file {
-	struct s_file_meta_data * file_metadata;
+struct s_core_wait_data {
+	int sz;
+	char * buf;
 };
 
 struct s_dserver {
 	struct s_hash * file_metadata;	// filename --> metadata
+
+	// data waiting for write
+	struct s_hash * waiting_data;
+
+	// lock
+	struct s_hash * locks;
+	struct s_list lock_sent;
+	struct s_list lock_waiting;
 };
 
 struct s_core_create_param {

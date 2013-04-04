@@ -73,6 +73,30 @@ s_hash_del(struct s_hash * hash, struct s_hash_key * key);
 		s_hash_del(hash, &__key);	\
 	} while(0)
 
+#define s_hash_set_id(hash, __id) ({	\
+		struct s_hash_key __key;	\
+		__key.id = __id;	\
+		__key.tt = S_HASH_KEY_ID;	\
+		void * __r = s_hash_set(hash, &__key);	\
+		__r;	\
+		})
+
+#define s_hash_get_id(hash, __id) ({	\
+		struct s_hash_key __key;	\
+		__key.id = __id;	\
+		__key.tt = S_HASH_KEY_ID;	\
+		void * __r = s_hash_get(hash, &__key);	\
+		__r;	\
+		})
+
+#define s_hash_del_id(hash, __id) \
+	do {	\
+		struct s_hash_key __key;	\
+		__key.id = __id;	\
+		__key.tt = S_HASH_KEY_ID;	\
+		s_hash_del(hash, &__key);	\
+	} while(0)
+
 #define s_hash_set_voidp(hash, voidp) ({	\
 		struct s_hash_key __key;	\
 		__key.p = voidp;	\
@@ -106,6 +130,7 @@ void * s_hash_next(struct s_hash * hash, int * id, struct s_hash_key * key);
 enum S_E_HASH_KEY {
 	S_HASH_KEY_STR = 1,
 	S_HASH_KEY_NUM,
+	S_HASH_KEY_ID,
 	S_HASH_KEY_VOIDP
 };
 
@@ -114,6 +139,7 @@ struct s_hash_key {
 		struct s_string * str;
 		double num;
 		void * p;
+		struct s_id id;
 	};
 	int tt;
 };

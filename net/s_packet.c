@@ -407,6 +407,24 @@ int s_packet_write_s(struct s_packet * pkt, const char * pstr, int len)
 	return 0;
 }
 
+int s_packet_read_to_end(struct s_packet * pkt, char * buf, int * size)
+{
+	int sz = pkt->size - pkt->pos;
+	if(!size) {
+		return sz;
+	}
+	if(!buf) {
+		*size = sz;
+		return sz;
+	}
+	if(sz > *size) {
+		return -1;
+	}
+	char * p = (char*)s_packet_data_p(pkt) + pkt->pos;
+	memcpy(buf, p, sz);
+	return sz;
+}
+
 void s_packet_grab(struct s_packet * pkt)
 {
 	pkt->ref_count++;

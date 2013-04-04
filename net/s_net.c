@@ -455,7 +455,8 @@ static int iread_conn(struct s_net * net, struct s_conn * conn)
 	}
 	if(conn->read_buf_sz - conn->read_buf_p < ndata) {
 		char * old = conn->read_buf;
-		conn->read_buf_sz = s_roundup(ndata * 2 + 1, 1024);
+		int sz = conn->read_buf_p + ndata;
+		conn->read_buf_sz = s_roundup(sz * 2 + 1, 1024);
 		conn->read_buf = s_malloc(char, conn->read_buf_sz);
 		if(!conn->read_buf) {
 			s_log("no mem!");

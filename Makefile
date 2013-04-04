@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O3 -DS_DEBUG -Wall
+CFLAGS = -g -DS_DEBUG -Wall
 LFLAGS = -lpthread
 AR = ar
 
@@ -33,8 +33,10 @@ all:
 	make -C ./serv_group
 	make -C ./core
 	ar -r $(LIB) $(OBJS)
-	make -C ./server
-	make -C ./test
+#	make -C ./server
+#	make -C ./test
+	make -C ./test2
+	make -C ./test3
 
 clean:
 	make -C ./common clean
@@ -46,6 +48,8 @@ clean:
 	make -C ./core clean
 	make -C ./server clean
 	make -C ./test clean
+	make -C ./test2 clean
+	make -C ./test3 clean
 	@rm -rf $(OBJS)
 	@rm -rf $(LIB)
 

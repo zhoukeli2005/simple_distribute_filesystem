@@ -70,6 +70,9 @@ int
 s_packet_read_string(struct s_packet * pkt, struct s_string ** pp);
 
 int
+s_packet_read_to_end(struct s_packet * pkt, char * buf, int * size);
+
+int
 s_packet_eof(struct s_packet * pkt);
 
 int
@@ -110,6 +113,12 @@ s_packet_write_string(struct s_packet * pkt, struct s_string * s);
 #define s_packet_size_for_uint(u)	4
 #define s_packet_size_for_short(u)	2
 #define s_packet_size_for_ushort(u)	2
+#define s_packet_size_for_id(i)		8
+
+#define s_packet_write_id(pkt, id)	{	\
+	s_packet_write_int(pkt, (id)->x);	\
+	s_packet_write_int(pkt, (id)->y);	\
+}
 
 /*
  *	Increase Reference Count

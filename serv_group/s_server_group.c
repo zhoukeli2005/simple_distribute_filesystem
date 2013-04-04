@@ -418,6 +418,7 @@ struct s_server * s_servg_create_serv(struct s_server_group * servg, int type, i
 		serv->id = id;
 		serv->type = type;
 		serv->servg = servg;
+		s_list_init(&serv->list);
 		return serv;
 	}
 

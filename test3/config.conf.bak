@@ -1,0 +1,49 @@
+# config
+
+# default
+	# if the other end doesnot answer in `sec_for_timeover`,
+	# then we can consider the connection is broken!
+	sec_for_timeover = 5
+
+	# seconds between ping the other end
+	sec_for_pingpong = 5
+
+	# seconds for re-connect
+	sec_for_reconnect = 3
+
+	# password for connect between server group : the date human first landed moon
+	ipc_pwd = 19690716 
+
+
+# meta-server
+mserver-1:
+	ip = 127.0.0.1
+	port = 8001
+	space = /tmp/mserv_1/
+
+# data server
+dserver-1:
+	ip = 127.0.0.1
+	port = 7001
+	space = /tmp/dserv_1/
+
+dserver-2:
+	ip = 127.0.0.1
+	port = 7002
+	space = /tmp/dserv_2/
+
+dserver-3:
+	ip = 127.0.0.1
+	port = 7003
+	space = /tmp/dserv_3/
+
+dserver-4:
+	ip = 127.0.0.1
+	port = 7004
+	space = /tmp/dserv_4/
+
+dserver-5:
+	ip = 127.0.0.1
+	port = 7005
+	space = /tmp/dserv_5/
+

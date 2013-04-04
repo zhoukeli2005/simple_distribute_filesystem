@@ -48,6 +48,11 @@ static unsigned int iget_hash(struct s_hash_key * key)
 		}
 		return hash;
 	}
+	if(key->tt == S_HASH_KEY_ID) {
+		unsigned int hash = 0;
+		hash = (unsigned int)(key->id.x + key->id.y);
+		return hash;
+	}
 	if(key->tt != S_HASH_KEY_VOIDP) {
 		s_log("[Error] key tt:%d!", key->tt);
 	}
@@ -70,6 +75,9 @@ static int iequal(struct s_hash_key * a, struct s_hash_key * b)
 	}
 	if(a->tt == S_HASH_KEY_VOIDP) {
 		return a->p == b->p;
+	}
+	if(a->tt == S_HASH_KEY_ID) {
+		return (a->id.x == b->id.x) && (a->id.y == b->id.y);
 	}
 	return s_string_equal(a->str, b->str);
 }
