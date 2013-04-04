@@ -8,6 +8,7 @@
 
 #include <errno.h>
 
+#include <pthread.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <time.h>
@@ -29,6 +30,9 @@
 
 #define s_max(x, y)	((x) > (y) ? (x) : (y))
 #define s_min(x, y)	((x) < (y) ? (x) : (y))
+
+#define likely(x)	__builtin_expect(!!(x), 1)
+#define unlikely(x)	__builtin_expect(!!(x), 0)
 
 /* - log - */
 #ifdef S_DEBUG_LOG
