@@ -94,8 +94,10 @@ static void init_mserv( struct s_core * core )
 	mserv->file_metadata = s_hash_create(sizeof(struct s_file_meta_data), 16);
 	mserv->file_meta_metadata = s_hash_create(sizeof(struct s_file_meta_meta_data *), 16);
 
+	// glock
 	mserv->glock = 0;
 	mserv->glock_elems = s_hash_create(sizeof(struct s_glock_elem), 16);
+
 
 	/* ------ glock ---------- */
 	s_servg_register(core->servg, S_SERV_TYPE_C, S_PKT_TYPE_GLOBAL_LOCK, &s_core_mserv_glock);

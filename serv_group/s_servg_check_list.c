@@ -96,8 +96,13 @@ int s_servg_check_list(struct s_server_group * servg)
 			break;
 		}
 
+		struct s_string * ip = serv->ip;
+		int port = serv->port;
+
 		// time over
-		s_log("[LOG]wait for pong time over, (%s:%d), re-connect!", s_string_data_p(serv->ip), serv->port);
+		if(ip) {
+			s_log("[LOG]wait for pong time over, (%s:%d), re-connect!", s_string_data_p(ip), port);
+		}
 
 		s_servg_reset_serv(servg, serv);
 	}

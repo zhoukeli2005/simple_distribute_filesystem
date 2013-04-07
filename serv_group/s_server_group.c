@@ -178,7 +178,12 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 
 	// if not find myself in config
 	if(!servg->net) {
-		servg->net = s_net_create(0, &s_servg_do_event, servg);
+		int port = 0;
+		if(servg->type == S_SERV_TYPE_M) {
+			port = S_SERV_M_DEFAULT_PORT + servg->id;
+			s_log("[LOG] mserv init at default port:%d", port);
+		}
+		servg->net = s_net_create(port, &s_servg_do_event, servg);
 		if(!servg->net) {
 			s_log("[Error] net create error!");
 			return -1;
@@ -400,6 +405,46 @@ void s_servg_rpc_ret(struct s_server * serv, unsigned int req_id, struct s_packe
 	s_packet_set_req(pkt, req_id);
 
 	s_net_send(serv->conn, pkt);
+}
+
+struct s_server * s_servg_connect(struct s_server_group * servg, int type, int id, const char * ip, int port)
+{
+	struct s_server * serv = s_servg_get_serv_in_config(servg, type, id);
+	if(serv) {
+		s_log("[Warning] s_servg_connect(type:%d, id:%d), already in IN_CONFIG", type, id);
+		return NULL;
+	}
+	serv = s_servg_get_active_serv(servg, type, id);
+	if(serv) {
+		s_log("[Warning] s_servg_connect(type:%d, id:%d), already active!", type, id);
+		return serv;
+	}
+	serv = s_servg_create_serv(servg, type, id);
+	if(!serv) {
+		s_log("[Warning] s_servg_connect(type:%d, id:%d), create_serv failed!", type, id);
+		return NULL;
+	}
+
+	gettimeofday(&serv->tv_connect, NULL);
+	serv->conn = s_net_connect(servg->net, ip, port);
+	if(!serv) {
+		s_log("[Warning] s_servg_connect(type:%d, id:%d), net_connect(%s:%d) failed!", type, id, ip, port);
+		s_servg_reset_serv(servg, serv);
+		return NULL;
+	}
+
+	s_net_set_udata(serv->conn, serv);
+
+	s_list_insert_tail(&servg->list_wait_for_identify, &serv->list);
+
+	serv->tv_send_identify = serv->tv_connect;
+
+	// send identification
+	struct s_packet * pkt = s_servg_pkt_identify(servg->type, servg->id, servg->ipc_pwd);
+	s_net_send(serv->conn, pkt);
+	s_packet_drop(pkt);
+
+	return serv;
 }
 
 static S_LIST_DECLARE(g_free_serv);

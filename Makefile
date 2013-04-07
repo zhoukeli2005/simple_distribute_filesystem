@@ -35,8 +35,9 @@ all:
 	ar -r $(LIB) $(OBJS)
 #	make -C ./server
 #	make -C ./test
-	make -C ./test2
-	make -C ./test3
+#	make -C ./test2
+#	make -C ./test3
+	make -C ./test_paxos
 
 clean:
 	make -C ./common clean
@@ -50,6 +51,7 @@ clean:
 	make -C ./test clean
 	make -C ./test2 clean
 	make -C ./test3 clean
+	make -C ./test_paxos clean
 	@rm -rf $(OBJS)
 	@rm -rf $(LIB)
 

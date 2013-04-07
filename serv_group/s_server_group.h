@@ -17,6 +17,8 @@ struct s_server_group;
 
 #define S_SERV_TYPE_MAX	4
 
+#define S_SERV_M_DEFAULT_PORT	10000
+
 typedef void(* S_SERVG_CALLBACK)(struct s_server * serv, struct s_packet * pkt, void * ud);
 
 struct s_servg_callback {
@@ -95,18 +97,6 @@ s_servg_get_min_delay_serv(struct s_server_group * servg, int type);
 
 
 /*
- *	get conn from server & get server from conn
- *
- */
-/*
-struct s_conn *
-s_servg_get_conn(struct s_server * serv);
-
-struct s_server *
-s_servg_get_serv_from_conn(struct s_conn * conn);
-*/
-
-/*
  *	get information
  *
  */
@@ -150,6 +140,13 @@ s_servg_rpc_ret(struct s_server * serv, unsigned int req_id, struct s_packet * p
 
 #define s_servg_send(serv, pkt) 	\
 	s_servg_rpc_call(serv, pkt, NULL, NULL, -1)
+
+/*
+ *	add new server
+ *
+ */
+struct s_server *
+s_servg_connect(struct s_server_group * servg, int type, int id, const char * ip, int port);
 
 #endif
 

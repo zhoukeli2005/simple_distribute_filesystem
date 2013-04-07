@@ -164,9 +164,11 @@ static void ilock_take_done(struct s_core * core, struct s_core_lock * lock)
 	int ret = ilock_next(core, lock, lock->pkt);
 
 	// write data
+	/*
 	struct s_core_lock_elem * elem = s_core_lock_p(lock);
 	elem[lock->next_pos - 1].finish = 1;
 	iwrite_data_and_free(core, elem[lock->next_pos-1].id);
+	*/
 
 	// has next -- add to sent list
 	if(ret) {
@@ -238,11 +240,11 @@ void s_core_dserv_write(struct s_server * serv, struct s_packet * pkt, void * ud
 	s_packet_read(pkt, &data_id.x, int, label_error);
 	s_packet_read(pkt, &data_id.y, int, label_error);
 
-	s_log("[LOG] write, id(%d, %d)", data_id.x, data_id.y);
+//	s_log("[LOG] write, id(%d, %d)", data_id.x, data_id.y);
 
-	iwrite_data_and_free(core, data_id);
+//	iwrite_data_and_free(core, data_id);
 
-	s_log("[LOG] write ok!");
+//	s_log("[LOG] write ok!");
 
 	s_servg_rpc_ret(serv, s_packet_get_req(pkt), pkt);
 	return;
@@ -272,16 +274,17 @@ void s_core_dserv_lock(struct s_server * serv, struct s_packet * pkt, void * ud)
 	struct s_core_lock * lock = s_core_lock_create(nserv);
 	struct s_core_lock_elem * elem = s_core_lock_p(lock);
 
-	lock->client_id = client_id;
-	lock->id = id;
-	lock->nserv = nserv;
-	lock->next_pos = curr + 1;
-	lock->next_serv = -1;
-
 	s_list_init(&lock->link);
 
 	lock->pkt = pkt;
 	s_packet_grab(pkt);
+
+	lock->id = id;
+	lock->client_id = client_id;
+
+	lock->next_pos = curr + 1;
+	lock->next_serv = -1;
+	lock->nserv = nserv;
 
 	int i;
 	for(i = 0; i < nserv; ++i) {
@@ -292,7 +295,7 @@ void s_core_dserv_lock(struct s_server * serv, struct s_packet * pkt, void * ud)
 		p->finish = 0;
 	}
 
-	if(elem[curr].serv_id != core->id) {
+	if(unlikely(elem[curr].serv_id != core->id)) {
 		s_log("[Warning] %d != %d!curr:%d", elem[curr].serv_id, core->id, curr);
 	}
 	assert(elem[curr].serv_id == core->id);
@@ -345,6 +348,7 @@ void s_core_dserv_lock_unlock(struct s_server * serv, struct s_packet * pkt, voi
 			if(!finish) {
 				break;
 			}
+			continue;
 		}
 		if(!elem[i].finish) {
 			finish = 0;
@@ -354,21 +358,21 @@ void s_core_dserv_lock_unlock(struct s_server * serv, struct s_packet * pkt, voi
 	if(finish) {
 		s_hash_del_id(dserv->locks, id);
 		s_list_del(&lock->link);
-		s_free(lock);
 		s_packet_drop(lock->pkt);
-	//	s_log("[LOG] This Lock is finished!");
+		s_free(lock);
 	}
 
 	struct s_list * p, * tmp;
+label_loop:
 	s_list_foreach_safe(p, tmp, &dserv->lock_waiting) {
 		lock = s_list_entry(p, struct s_core_lock, link);
 		if(!ilock_conflict_all(core, lock)) {
 			// non-conflict
 			s_list_del(&lock->link);
 
-		//	s_log("[LOG] Start Process Lock:%d.%d", lock->id.x, lock->id.y);
-
 			ilock_take_done(core, lock);
+
+			goto label_loop;
 		}
 	}
 

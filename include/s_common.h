@@ -25,6 +25,8 @@ struct s_id {
 	int y;
 };
 
+#define s_id_gt(a, b)	( ( (a)->y > (b)->y ) || ( ( (a)->y == (b)->y ) && (a)->x > (b)->x ) )
+
 /* - bit - */
 #define S_SETBIT(f, b)		f |= (b)
 #define S_CLEARBIT(f, b)	f &= ~(b)

@@ -11,6 +11,8 @@
 #include <s_mem.h>
 #include <s_common.h>
 
+struct s_paxos;
+
 /* -- block size : 4M -- */
 #define S_CORE_BLOCK_BITS	22
 #define S_CORE_BLOCK_SIZE	(1 << 22)
@@ -116,6 +118,7 @@ struct s_mserver {
 	// global lock
 	unsigned int glock;
 	struct s_hash * glock_elems;
+
 };
 
 struct s_client {
@@ -170,6 +173,9 @@ struct s_core {
 	};
 
 	struct s_core_create_param create_param;
+
+	// Paxos
+	struct s_paxos * paxos;
 };
 
 #define s_core_client(c)	&((c)->client)

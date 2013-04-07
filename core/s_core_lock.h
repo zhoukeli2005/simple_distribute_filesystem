@@ -20,8 +20,6 @@ struct s_core_lock {
 
 	int client_id;
 
-	unsigned int lock;
-
 	int next_pos;
 	int next_serv;
 	int nserv;

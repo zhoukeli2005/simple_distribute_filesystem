@@ -219,7 +219,7 @@ void * s_hash_set(struct s_hash * H, struct s_hash_key * key)
 		free_node->key = *key;
 		free_node->link.next = node->link.next;
 		node->link.next = (void*)free_node;
-		return ival(node);
+		return ival(free_node);
 	}
 
 	// 3. do not at main position, move it

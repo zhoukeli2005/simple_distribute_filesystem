@@ -19,7 +19,7 @@ void s_core_mserv_glock(struct s_server * serv, struct s_packet * pkt, void * ud
 	s_packet_read(pkt, &lock_id.y, int, label_error);
 	s_packet_read(pkt, &lock, uint, label_error);
 
-	s_log("id.x:%d, id.y:%d, lock:%x", lock_id.x, lock_id.y, lock);
+//	s_log("id.x:%d, id.y:%d, lock:%x", lock_id.x, lock_id.y, lock);
 
 	struct s_glock_elem * elem = s_hash_set_id(mserv->glock_elems, lock_id);
 	if(!elem) {
@@ -32,14 +32,14 @@ void s_core_mserv_glock(struct s_server * serv, struct s_packet * pkt, void * ud
 	elem->is_waiting = 1;
 	
 	if(!(mserv->glock & lock)) {
-		s_log("[LOG] no-conflict! ok");
+	//	s_log("[LOG] no-conflict! ok");
 		elem->is_waiting = 0;
 		mserv->glock |= lock;
 		s_servg_rpc_ret(serv, req_id, pkt);
 		return;
 	}
 
-	s_log("[LOG] conflict! waiting...");
+//	s_log("[LOG] conflict! waiting...");
 
 	return;
 
@@ -63,7 +63,7 @@ void s_core_mserv_glock_unlock(struct s_server * serv, struct s_packet * pkt, vo
 	s_packet_read(pkt, &lock_id.x, int, label_error);
 	s_packet_read(pkt, &lock_id.y, int, label_error);
 
-	s_log("id.x:%d, id.y:%d, lock:%u", lock_id.x, lock_id.y, lock);
+//	s_log("id.x:%d, id.y:%d, lock:%u", lock_id.x, lock_id.y, lock);
 
 	struct s_glock_elem * elem = s_hash_get_id(mserv->glock_elems, lock_id);
 	if(!elem) {
@@ -73,11 +73,11 @@ void s_core_mserv_glock_unlock(struct s_server * serv, struct s_packet * pkt, vo
 
 	assert(id == elem->client_id);
 
-	s_log("[LOG] release : %x", elem->lock);
+//	s_log("[LOG] release : %x", elem->lock);
 
 	mserv->glock &= ~(elem->lock);
 
-	s_log("curr lock:%x", mserv->glock);
+//	s_log("curr lock:%x", mserv->glock);
 
 	// del elem
 	s_hash_del_id(mserv->glock_elems, lock_id);
@@ -100,7 +100,7 @@ void s_core_mserv_glock_unlock(struct s_server * serv, struct s_packet * pkt, vo
 
 		elem->is_waiting = 0;
 
-		s_log("[LOG] unlock, id(%d, %d), lock:%x", key.id.x, key.id.y, elem->lock);
+	//	s_log("[LOG] unlock, id(%d, %d), lock:%x", key.id.x, key.id.y, elem->lock);
 		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_C, elem->client_id);
 
 		if(!serv) {

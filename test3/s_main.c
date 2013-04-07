@@ -78,7 +78,7 @@ int main(int argc, char * argv[])
 	/* 5 -- do main process -- */
 	while(1) {
 		/* 1. do servg stuff */
-		if(s_core_poll(core, 10) < 0) {
+		if(s_core_poll(core, 5) < 0) {
 			s_log("[Error] s_core_poll error!");
 			break;
 		}

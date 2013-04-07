@@ -105,6 +105,10 @@ void ihandle_identify(struct s_server_group * servg, struct s_conn * conn, struc
 	s_net_set_udata(conn, serv);
 	serv->conn = conn;
 
+	// ip port
+	serv->ip = s_string_create(s_net_ip(conn));
+	serv->port = s_net_port(conn);
+
 	// set flags
 	serv->flags |= S_SERV_FLAG_ESTABLISHED;
 

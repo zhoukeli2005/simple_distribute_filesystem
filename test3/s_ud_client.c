@@ -10,7 +10,11 @@ struct s_glock_client {
 	struct timeval tv;
 };
 
+static int MaxTry = 0;
+
 static struct timeval gtv;
+static struct timeval g_tv_start;
+
 static int gid;
 static int ginit = 0;
 static int gcount = 0;
@@ -34,7 +38,7 @@ static int irand_serv(int * out)
 
 	memcpy(out, serv[i], sizeof(int) * 5);
 
-	return 0;
+	return 3;
 }
 
 void * s_ud_client_init(struct s_core * core)
@@ -45,6 +49,19 @@ void * s_ud_client_init(struct s_core * core)
 
 	s_servg_register(core->servg, S_SERV_TYPE_D, S_PKT_TYPE_LOCK_END, &lock_callback);
 
+	struct s_config * config = core->create_param.config;
+	if(s_config_select(config, "default") < 0) {
+		s_log("select config.defalut error!");
+		exit(0);
+	}   
+
+	MaxTry = s_config_read_i(config, "MaxTry");
+
+	if(MaxTry <= 0) {
+		s_log("select config.default.MaxTry error!");
+		exit(0);
+	}
+
 	return NULL;
 }
 
@@ -54,7 +71,7 @@ void s_ud_client_update(struct s_core * core, void * ud)
 		return;
 	}
 
-	if(gcount >= 50) {
+	if(gcount >= MaxTry) {
 		return;
 	}
 
@@ -64,13 +81,14 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	struct timeval ret;
 	timersub(&tv, &gtv, &ret);
 
-	if(ret.tv_usec < 100) {
+	if(ret.tv_usec < 10) {
 		return;
 	}
 
 	gtv = tv;
 
-	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_PUSH_DATA, 3 * 1024 * 1024);
+	struct s_packet * pkt;
+//	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_PUSH_DATA, 3 * 1024 * 1024);
 	struct s_glock_client * c = s_malloc(struct s_glock_client, 1);
 
 	c->id.x = core->id;
@@ -78,16 +96,17 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	c->tv = tv;
 	c->core = core;
 
-	s_log("start to write id(%d,%d) ...", c->id.x, c->id.y);
+//	s_log("start to write id(%d,%d) ...", c->id.x, c->id.y);
 
-	s_packet_write_int(pkt, c->id.x);
-	s_packet_write_int(pkt, c->id.y);
-
-	int nserv = 0;
-	int servs[32];
-	irand_serv(servs);
+//	s_packet_write_int(pkt, c->id.x);
+//	s_packet_write_int(pkt, c->id.y);
 
 	int i;
+	int nserv = 0;
+	int servs[32];
+	nserv = irand_serv(servs);
+
+	/*
 	for(i = 0; i < 5; ++i) {
 		int serv_id = servs[i];
 		if(!serv_id) {
@@ -101,8 +120,8 @@ void s_ud_client_update(struct s_core * core, void * ud)
 		s_servg_send(serv, pkt);
 		nserv++;
 	}
-
 	s_packet_drop(pkt);
+	*/
 
 	int sz = s_packet_size_for_int(0) +
 		s_packet_size_for_int(0) +
@@ -140,10 +159,16 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	s_packet_drop(pkt);
 
 	gcount++;
+	if(gcount == 1) {
+		g_tv_start = tv;
+	}
 }
 
 static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
+	if(!pkt) {
+		return;
+	}
 	struct s_core * core = ud;
 	struct s_client * cl = s_core_client(core);
 
@@ -164,10 +189,19 @@ static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * 
 
 	timersub(&tv, &c->tv, &ret);
 
-	s_log("[LOG] id(%d.%d) time consume : %lu.%lu", id.x, id.y, ret.tv_sec, ret.tv_usec);
+//	s_log("[LOG] id(%d.%d) time consume : %lu.%lu", id.x, id.y, ret.tv_sec, ret.tv_usec);
+
+	static int C = 0;
+	C++;
+	if(C >= MaxTry) {
+		timersub(&tv, &g_tv_start, &ret);
+		s_log("[LOG] total time consume : %lu.%lu", ret.tv_sec, ret.tv_usec);
+	}
+
 	return;
 
 label_error:
 	s_log("[Warning] lock_callback : read error pkt!");
 	return;
 }
+

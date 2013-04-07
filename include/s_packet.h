@@ -120,6 +120,43 @@ s_packet_write_string(struct s_packet * pkt, struct s_string * s);
 	s_packet_write_int(pkt, (id)->y);	\
 }
 
+#define s_packet_start_write(pkt_out, __fun)	\
+	do {	\
+		struct s_packet * __pkt = NULL;	\
+		int __i;	\
+		int __sz = 0;	\
+		for(__i = 0; __i < 2; ++__i) {	\
+			if(__i == 1) {	\
+				__pkt = s_packet_easy(__fun, __sz);	\
+				pkt_out = __pkt;	\
+			}
+
+#define s_packet_wint(__i)	\
+	if(__pkt) {	\
+		s_packet_write_int(__pkt, __i);	\
+	} else 	{	\
+		__sz += s_packet_size_for_int(__i);	\
+	}
+
+#define s_packet_wuint(__i)	\
+	if(__pkt) {	\
+		s_packet_write_uint(__pkt, __i);	\
+	} else 	{	\
+		__sz += s_packet_size_for_uint(__i);	\
+	}
+
+#define s_packet_wstring(__s)	\
+	if(__pkt) {	\
+		s_packet_write_string(__pkt, __s);	\
+	} else 	{	\
+		__sz += s_packet_size_for_string(__s);	\
+	}
+
+#define s_packet_end_write()	\
+		}	\
+	} while(0)
+
+
 /*
  *	Increase Reference Count
  *

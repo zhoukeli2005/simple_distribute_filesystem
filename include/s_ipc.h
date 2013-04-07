@@ -38,6 +38,11 @@ enum S_ENUM_PKT_TYPE {
 		S_PKT_TYPE_LOCK_UNLOCK,				// dserv --> dserv
 		S_PKT_TYPE_LOCK_END,				// dserv --> client
 
+	// Paxos
+		S_PKT_TYPE_PAXOS_REQUEST,
+		S_PKT_TYPE_PAXOS_RESPONSE,
+		S_PKT_TYPE_PAXOS_ACCEPT,
+		S_PKT_TYPE_PAXOS_LEARN,
 
 	// end
 	S_PKT_TYPE_MAX_
