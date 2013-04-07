@@ -4,6 +4,7 @@
 #include "s_core_glock.h"
 #include "s_core_dserv.h"
 #include "s_core_lock.h"
+#include "s_core_paxos.h"
 
 #include <s_mem.h>
 
@@ -42,6 +43,8 @@ struct s_core * s_core_create( struct s_core_create_param * param )
 		s_log("[Error] server-group init config failed!");
 		return NULL;
 	}
+
+	core->paxos = s_paxos_create(core);
 
 	int type = core->type;
 

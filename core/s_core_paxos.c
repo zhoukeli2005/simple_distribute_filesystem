@@ -16,6 +16,8 @@ static void ireceive_response(struct s_server * serv, struct s_packet * pkt, voi
 static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void * ud);
 static void ireceive_learn(struct s_server * serv, struct s_packet * pkt, void * ud);
 
+static void iresponse(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value);
+static void iaccept(struct s_core * core, struct s_string * topic, struct s_id * id, int value, int version);
 static void ilearn(struct s_core * core, struct s_string * topic, int value, int serv_id);
 
 struct s_paxos * s_paxos_create(struct s_core * core)
@@ -36,7 +38,7 @@ struct s_paxos * s_paxos_create(struct s_core * core)
 	paxos->my_proposal = s_hash_create(sizeof(struct s_paxos_proposal *), 16);
 	paxos->response = s_hash_create(sizeof(struct s_id), 16);
 	paxos->accept = s_hash_create(sizeof(struct s_array *), 16);
-	paxos->learn = s_hash_create(sizeof(struct s_array *), 16);
+	paxos->learn = s_hash_create(sizeof(struct s_hash *), 16);
 
 	paxos->id = 1;
 
@@ -154,9 +156,9 @@ void s_paxos_start(struct s_core * core, struct s_string * topic, int value)
 		}
 	}
 	if(value < 0) {
-		s_paxos_response(core, p, NULL, -1);
+		iresponse(core, p, NULL, -1);
 	} else {
-		s_paxos_response(core, p, &max_id, value);
+		iresponse(core, p, &max_id, value);
 	}
 
 	// drop proposal
@@ -280,9 +282,9 @@ static void ireceive_response(struct s_server * serv, struct s_packet * pkt, voi
 			p->response.value = value;
 		}
 
-		s_paxos_response(core, p, &max_id, value);
+		iresponse(core, p, &max_id, value);
 	} else {
-		s_paxos_response(core, p, NULL, -1);
+		iresponse(core, p, NULL, -1);
 	}
 
 label_error:
@@ -291,7 +293,7 @@ label_error:
 	return;
 }
 
-void s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value)
+static void iresponse(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value)
 {
 	struct s_paxos * paxos = core->paxos;
 
@@ -324,6 +326,9 @@ void s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct 
 		int i;
 		for(i = 0; i < paxos->version.nserv; ++i) {
 			int serv_id = paxos->version.servs[i];
+			if(serv_id == core->id) {
+				continue;
+			}
 			struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, serv_id);
 			if(!serv) {
 				s_log("[LOG] s_paxos_response:send accept to serv:%d, missing!", serv_id);
@@ -333,13 +338,15 @@ void s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct 
 		}
 
 		s_packet_drop(pkt);
+
+		// accept myself
+		iaccept(core, p->topic, &p->id, p->value, p->version.version);
 	}
 }
 
 static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
 	struct s_core * core = ud;
-	struct s_paxos * paxos = core->paxos;
 
 	struct s_string * topic = NULL;
 	struct s_id id;
@@ -352,16 +359,29 @@ static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void 
 	s_packet_read(pkt, &value, int, label_error);
 	s_packet_read(pkt, &version, int, label_error);
 
+	iaccept(core, topic, &id, value, version);
+
+label_error:
+	if(topic) {
+		s_string_drop(topic);
+	}
+	return;
+}
+
+static void iaccept(struct s_core * core, struct s_string * topic, struct s_id * id, int value, int version)
+{
+	struct s_paxos * paxos = core->paxos;
+
 	if(version != paxos->version.version) {
 		s_log("[LOG] accept : invalid version(%d != %d)", version, paxos->version.version);
-		goto label_error;
+		return;
 	}
 
 	struct s_id * pid = s_hash_get_str(paxos->response, topic);
 	if(pid) {
-		if(s_id_gt(pid, &id)) {
-			s_log("[LOG] accept : smaller id(%d.%d) < (%d.%d)", id.x, id.y, pid->x, pid->y);
-			goto label_error;
+		if(s_id_gt(pid, id)) {
+			s_log("[LOG] accept : smaller id(%d.%d) < (%d.%d)", id->x, id->y, pid->x, pid->y);
+			return;
 		}
 	}
 
@@ -374,14 +394,15 @@ static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void 
 	struct s_array * tmp = *pp;
 	struct s_paxos_accept * accept = s_array_push(tmp);
 
-	accept->topic = topic;
-	accept->id = id;
+	accept->topic = s_string_grab(topic);
+	accept->id = *id;
 	accept->value = value;
 
 	// save to myself -- learner
 	ilearn(core, topic, value, core->id);
 
 	// broadcast to every one
+	struct s_packet * pkt;
 	s_packet_start_write(pkt, S_PKT_TYPE_PAXOS_LEARN)
 	{
 		s_packet_wstring(topic);
@@ -391,6 +412,9 @@ static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void 
 	int i;
 	for(i = 0; i < paxos->version.nserv; ++i) {
 		int serv_id = paxos->version.servs[i];
+		if(serv_id == core->id) {
+			continue;
+		}
 		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, serv_id);
 		if(!serv) {
 			s_log("[LOG] broadcast to leaner(%d) missing", serv_id);
@@ -402,12 +426,6 @@ static void ireceive_accept(struct s_server * serv, struct s_packet * pkt, void 
 
 	s_packet_drop(pkt);
 
-	return;
-
-label_error:
-	if(topic) {
-		s_string_drop(topic);
-	}
 	return;
 }
 
@@ -437,17 +455,31 @@ static void ilearn(struct s_core * core, struct s_string * topic, int value, int
 	struct s_paxos * paxos = core->paxos;
 	struct s_hash ** pp = s_hash_get_str(paxos->learn, topic);
 	if(!pp) {
-		pp = s_hash_get_str(paxos->learn, topic);
-		*pp = s_hash_create(sizeof(int), 16);
+		pp = s_hash_set_str(paxos->learn, topic);
+		*pp = s_hash_create(sizeof(struct s_array *), 16);
 	}
 
 	struct s_hash * p = *pp;
-	int * pcount = s_hash_get_num(p, value);
-	if(!pcount) {
-		pcount = s_hash_set_num(p, value);
-		*pcount = 0;
+	struct s_array ** pparray = s_hash_get_num(p, value);
+	if(!pparray) {
+		pparray = s_hash_set_num(p, value);
+		*pparray = s_array_create(sizeof(int), 16);
 	}
-	(*pcount)++;
+	s_log("[LOG] i learn:%s, value:%d", s_string_data_p(topic), value);
+	int i;
+	for(i = 0; i < s_array_len(*pparray); ++i) {
+		int * tmp = s_array_at(*pparray, i);
+		if(*tmp == serv_id) {
+			s_log("[LOG] already learn from serv:%d", serv_id);
+			return;
+		}
+	}
+
+	int * tmp = s_array_push(*pparray);
+	*tmp = serv_id;
+
+	s_log("[LOG] nserv:%d", s_array_len(*pparray));
 
 	return;
 }
+

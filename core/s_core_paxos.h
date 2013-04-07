@@ -77,8 +77,8 @@ s_paxos_is_in(struct s_paxos * paxos, int serv);
 void
 s_paxos_start(struct s_core * core, struct s_string * topic, int value);
 
-void
-s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value);
+//void
+//s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value);
 
 #endif
 
