@@ -2,7 +2,9 @@
 #include <s_mem.h>
 #include <s_hash.h>
 #include <s_ipc.h>
+#include <s_queue.h>
 #include "s_servg.h"
+
 
 static struct s_server_group g_serv;
 
@@ -35,6 +37,8 @@ struct s_server_group * s_servg_create(int type, int id, struct s_servg_callback
 
 	s_list_init(&servg->rpc_timeout_list);
 
+	servg->myself_q = s_queue_create(sizeof(struct ipacket), 32);
+
 	return servg;
 }
 
@@ -62,6 +66,8 @@ static int iparse_config_serv_type_id(const char * p, int * type, int * id);
 int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 {
 	servg->config = config;
+
+	servg->myself = NULL;
 
 	struct s_string * ip_str = s_string_create("ip");
 	struct s_string * port_str = s_string_create("port");
@@ -159,6 +165,8 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 				s_log("[Error] net init error!port:%d", port);
 				return -1;
 			}
+
+			servg->myself = serv;
 		}
 
 		// timer
@@ -188,6 +196,19 @@ int s_servg_init_config(struct s_server_group * servg, struct s_config * config)
 			s_log("[Error] net create error!");
 			return -1;
 		}
+
+		servg->myself = s_servg_create_serv(servg, servg->type, servg->id);
+	}
+
+	// init myself
+	{
+		servg->myself->flags = S_SERV_FLAG_ESTABLISHED;
+		servg->myself->conn = NULL;
+		servg->myself->ip = s_string_create("127.0.0.1");
+		servg->myself->port = -1;
+		servg->myself->req_id = 1;
+		servg->myself->rpc_hash = s_hash_create(sizeof(struct s_servg_rpc_param), 16);
+		s_list_init(&servg->myself->list);
 	}
 
 	s_string_drop(ip_str);
@@ -201,6 +222,18 @@ int s_servg_poll(struct s_server_group * servg, int msec)
 	/* --- check server connection / reconnection / ping-pong --- */
 	if(s_servg_check_list(servg) < 0) {
 		return -1;
+	}
+
+	/* --- check send to myself --- */
+	while(!s_queue_empty(servg->myself_q)) {
+		struct ipacket * p = s_queue_peek(servg->myself_q);
+		if(p) {
+			s_packet_seek(p->pkt, 0);
+			s_packet_set_req(p->pkt, p->req_id);
+			s_servg_do_event(NULL, p->pkt, servg);
+			s_packet_drop(p->pkt);
+		}
+		s_queue_pop(servg->myself_q);
 	}
 
 	/* --- check rpc timeout --- */
@@ -343,11 +376,27 @@ void * s_servg_gdata(struct s_server_group * servg)
 	return servg->callback.udata;
 }
 
+/* ---- RPC ---- */
+static void isend(struct s_server * serv, struct s_packet * pkt)
+{
+	struct s_server_group * servg = serv->servg;
+	if(serv == servg->myself) {
+		// send to myself
+		struct ipacket * p = s_queue_push(servg->myself_q);
+		p->req_id = s_packet_get_req(pkt);
+		s_packet_grab(pkt);
+		p->pkt = pkt;
+		return;
+	}
+	s_net_send(serv->conn, pkt);
+}
+
 int s_servg_rpc_call(struct s_server * serv, struct s_packet * pkt, void * ud, S_SERVG_CALLBACK callback, int msec_timeout)
 {
 	if(!callback) {
 		// normal send
-		s_net_send(serv->conn, pkt);
+	//	s_net_send(serv->conn, pkt);
+		isend(serv, pkt);
 		return 0;
 	}
 	struct s_server_group * servg = serv->servg;
@@ -395,7 +444,7 @@ int s_servg_rpc_call(struct s_server * serv, struct s_packet * pkt, void * ud, S
 	*pp = param;
 
 	// send packet
-	s_net_send(serv->conn, pkt);
+	isend(serv, pkt);
 	return 0;
 }
 
@@ -404,7 +453,8 @@ void s_servg_rpc_ret(struct s_server * serv, unsigned int req_id, struct s_packe
 	s_packet_set_fun(pkt, S_PKT_TYPE_RPC_BACK_);
 	s_packet_set_req(pkt, req_id);
 
-	s_net_send(serv->conn, pkt);
+//	s_net_send(serv->conn, pkt);
+	isend(serv, pkt);
 }
 
 struct s_server * s_servg_connect(struct s_server_group * servg, int type, int id, const char * ip, int port)
@@ -487,25 +537,6 @@ struct s_server * s_servg_create_serv(struct s_server_group * servg, int type, i
 	serv->servg = servg;
 	s_list_init(&serv->list);
 	return serv;
-
-	/*
-	struct s_server * serv;
-	if(!s_list_empty(&g_free_serv)) {
-		struct s_list * p = s_list_first(&g_free_serv);
-		s_list_del(p);
-		serv = s_list_entry(p, struct s_server, list);
-	} else {
-		serv = s_malloc(struct s_server, 1);
-	}
-
-	memset(serv, 0, sizeof(struct s_server));
-
-	s_list_init(&serv->list);
-
-	serv->servg = servg;
-
-	return serv;
-	*/
 }
 
 void s_servg_reset_serv(struct s_server_group * servg, struct s_server * serv)

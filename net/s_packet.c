@@ -136,7 +136,7 @@ char * s_packet_data_p(struct s_packet * pkt)
 int s_packet_seek(struct s_packet * pkt, int offset)
 {
 	int sz_can_rw = pkt->size - S_PKT_HEAD_SIZE;
-	if(offset < 0 || offset >= sz_can_rw) {
+	if(offset < 0 || offset > sz_can_rw) {
 		s_log("seek offset:%d of %d not valid!", offset, sz_can_rw);
 		return -1;
 	}

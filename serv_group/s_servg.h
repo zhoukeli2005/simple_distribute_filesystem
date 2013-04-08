@@ -21,6 +21,12 @@
 #define S_SERV_FLAG_ESTABLISHED (1 << 0)        // server is connected and established
 #define S_SERV_FLAG_IN_CONFIG   (1 << 1)        // server is in config.conf
 
+// for rpc call
+struct ipacket {
+	unsigned int req_id;
+	struct s_packet * pkt;
+};
+
 struct s_servg_rpc_param {
 	unsigned int req_id;
 	void * ud;
@@ -89,6 +95,10 @@ struct s_server_group {
 		int sec_for_reconnect;
 
 	// -- }
+
+	// myself
+	struct s_server * myself;
+	struct s_queue * myself_q;
 
 	// net
 	struct s_net * net;

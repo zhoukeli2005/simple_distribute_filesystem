@@ -52,6 +52,13 @@ int main(int argc, char * argv[])
 		return 0;
 	}
 
+	/* 3.2 -- parse id we will connect -- */
+	g_ud.serv_id = -1;
+	if(argc > 1) {
+		g_ud.serv_id = atoi(argv[1]);
+		s_log("[LOG] will connect to %d", g_ud.serv_id);
+	}
+
 	/* 4 -- create main data-structure : s_core -- */
 
 	struct s_core_create_param create_param = {
@@ -74,6 +81,15 @@ int main(int argc, char * argv[])
 	}
 
 	s_log("core create ok, id:%d", id);
+
+	/* 4.2 -- connect to mserv -- */
+	if(g_ud.serv_id <= 0) {
+		g_ud.serv_id = 1;
+	}
+	if(g_ud.serv_id > 0) {
+		g_ud.serv = s_servg_connect(core->servg, S_SERV_TYPE_M, g_ud.serv_id,
+				"127.0.0.1", S_SERV_M_DEFAULT_PORT + g_ud.serv_id);
+	}
 
 	/* 5 -- do main process -- */
 	while(1) {

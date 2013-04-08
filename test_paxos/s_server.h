@@ -14,6 +14,13 @@
 #include <s_ipc.h>
 #include <s_server_group.h>
 
+struct s_ud {
+	int serv_id;
+	struct s_server * serv;
+};
+
+extern struct s_ud g_ud;
+
 
 void *
 s_ud_client_init(struct s_core * core);

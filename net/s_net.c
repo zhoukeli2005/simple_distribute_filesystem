@@ -25,6 +25,7 @@ struct packet_node {
 	char * p;
 	int curr;
 	int total;
+	unsigned int req_id;
 };
 
 #define DEFAULT_READ_BUFFER_SZ	1024
@@ -255,6 +256,7 @@ void s_net_send(struct s_conn * conn, struct s_packet * pkt)
 	pn->p = s_packet_data_p(pkt);
 	pn->total = s_packet_size(pkt);
 	pn->curr = 0;
+	pn->req_id = s_packet_get_req(pkt);
 
 	if(iwrite_conn(conn->net, conn) < 0) {
 		s_log("iwrite_conn(...) < 0. close conn!");
@@ -399,6 +401,9 @@ static struct s_conn * iget_conn(struct s_net * net)
 			return NULL;
 		}
 		net->nconn++;
+		conn->write_queue = NULL;
+		conn->read_buf = NULL;
+		conn->read_buf_sz = 0;
 	}
 
 	conn->net = net;
@@ -517,6 +522,7 @@ again:
 		if(!pn) {
 			break;
 		}
+		s_packet_set_req(pn->pkt, pn->req_id);
 		int nsend = write(conn->fd, &pn->p[pn->curr], pn->total - pn->curr);
 		if(nsend < 0) {
 			switch(errno) {

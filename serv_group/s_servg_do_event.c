@@ -266,7 +266,7 @@ static void ihandle_rpc_back(struct s_server_group * servg, struct s_server * se
 	unsigned int req = s_packet_get_req(pkt);
 	struct s_servg_rpc_param ** pp = s_hash_get_num(serv->rpc_hash, req);
 	if(!pp) {
-		s_log("[Warning] no rpc_param for %u", req);
+		s_log("[Warning] no rpc_param for %u, serv:%d", req, serv->id);
 		return;
 	}
 	struct s_servg_rpc_param * param = *pp;
@@ -297,7 +297,13 @@ void s_servg_do_event(struct s_conn * conn, struct s_packet * pkt, void * udata)
 		return;
 	}
 
-	struct s_server * serv = s_net_get_udata(conn);
+	struct s_server * serv;
+        if(conn) {
+		serv = s_net_get_udata(conn);
+	} else {
+		serv = servg->myself;
+	}
+
 	if(!serv) {
 		// must be identify
 		ihandle_identify(servg, conn, pkt);
