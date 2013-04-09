@@ -34,6 +34,7 @@ struct s_paxos_accept {
 
 	struct s_id id;
 	int value;
+	int version;
 };
 
 struct s_paxos_learn {
@@ -57,6 +58,7 @@ struct s_paxos_proposal {
 
 	struct s_id id;
 	struct {
+		int nsent;
 		int count;
 		struct s_id max_id;
 		int value;
@@ -78,6 +80,8 @@ struct s_paxos {
 
 	struct s_hash * learn;
 
+	struct s_hash * backup;	// backup for other servs
+
 	int id;
 
 	struct {
@@ -97,8 +101,8 @@ s_paxos_start(struct s_core * core, struct s_string * topic, int value, int type
 void
 s_paxos_learn_all(struct s_core * core);
 
-//void
-//s_paxos_response(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value);
+void
+s_paxos_check_leave(struct s_core * core);
 
 #endif
 

@@ -20,6 +20,7 @@ static void ireceive_learn(struct s_server * serv, struct s_packet * pkt, void *
 static void ireceive_learn_request(struct s_server * serv, struct s_packet * pkt, void * ud);
 static void ireceive_add(struct s_server * serv, struct s_packet * pkt, void * ud);
 static void ireceive_add_accept(struct s_server * serv, struct s_packet * pkt, void * ud);
+static void ireceive_refresh_accept(struct s_server * serv, struct s_packet * pkt, void * ud);
 
 /* --- do the job --- */
 static void iresponse(struct s_core * core, struct s_paxos_proposal * p, struct s_id * id, int value);
@@ -33,6 +34,28 @@ static int iget_new_version(struct s_string * topic)
 		return atoi(s_string_data_p(topic) + 8);
 	}
 	return -1;
+}
+
+static int iversion_to_int(struct s_paxos_version * v)
+{
+	int value = 0;
+	int i;
+	for(i = 0; i < v->nserv; ++i) {
+		value |= 1 << v->servs[i];
+	}
+	return value;
+}
+
+static void iversion_from_int(struct s_paxos_version * v, int value)
+{
+	int i;
+	int c = 0;
+	for(i = 0; i < 32; ++i) {
+		if(value & (1 << i)) {
+			v->servs[c++] = i;
+		}
+	}
+	v->nserv = c;
 }
 
 static void icheck_new_version(struct s_core * core);
@@ -61,14 +84,19 @@ struct s_paxos * s_paxos_create(struct s_core * core)
 	paxos->accept = s_hash_create(sizeof(struct s_array *), 16);
 	paxos->learn = s_hash_create(sizeof(struct s_hash *), 16);
 
+	paxos->backup = s_hash_create(sizeof(struct s_array *), 16);
+
 	paxos->id = 1;
 
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_REQUEST, &ireceive_request);
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_ACCEPT, &ireceive_accept);
-//	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_LEARN, &ireceive_learn);
+
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_LEARN_REQUEST, &ireceive_learn_request);
+
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_ADD_ME, &ireceive_add);
 	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_ADD_ACCEPT, &ireceive_add_accept);
+
+	s_servg_register(core->servg, S_SERV_TYPE_M, S_PKT_TYPE_PAXOS_REFRESH_ACCEPT, &ireceive_refresh_accept);
 
 	return paxos;
 }
@@ -185,6 +213,7 @@ void s_paxos_start(struct s_core * core, struct s_string * topic, int value, int
 	}
 	s_packet_end_write();
 
+	p->response.nsent = 0;
 	for(i = 0; i < paxos->version.nserv; ++i) {
 		int serv_id = paxos->version.servs[i];
 		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, serv_id);
@@ -195,6 +224,7 @@ void s_paxos_start(struct s_core * core, struct s_string * topic, int value, int
 		}
 		
 		s_servg_rpc_call(serv, pkt, s_paxos_proposal_grab(p), &ireceive_response, 1000);
+		p->response.nsent++;
 	}
 
 	s_packet_drop(pkt);
@@ -213,7 +243,8 @@ void s_paxos_learn_all(struct s_core * core)
 
 	paxos->learn = s_hash_create(sizeof(struct s_array *), 16);
 
-	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_PAXOS_LEARN_REQUEST, 0);
+	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_PAXOS_LEARN_REQUEST, s_packet_size_for_int(0));
+	s_packet_write_int(pkt, paxos->version.version);
 
 	int c = 0;
 	int i;
@@ -231,6 +262,28 @@ void s_paxos_learn_all(struct s_core * core)
 	paxos->learn_req.count = c;
 
 	s_packet_drop(pkt);
+}
+
+void s_paxos_check_leave(struct s_core * core)
+{
+	struct s_paxos * paxos = core->paxos;
+
+	int i;
+	for(i = 0; i < paxos->version.nserv; ++i) {
+		int serv_id = paxos->version.servs[i];
+		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, serv_id);
+		if(!serv) {
+			s_log("[Paxos:Remove Member] Detected Server(%d) has Leaved!", serv_id);
+
+			int value = iversion_to_int(&paxos->version);
+			value &= ~(1 << serv_id);
+			struct s_string * topic = s_string_create_format("version:%d", paxos->version.version + 1);
+
+			s_paxos_start(core, topic, value, S_PAXOS_PROPOSAL_RM, serv_id);
+
+			break;
+		}
+	}
 }
 
 static void ireceive_request(struct s_server * serv, struct s_packet * pkt, void * ud)
@@ -301,6 +354,24 @@ static void ireceive_request(struct s_server * serv, struct s_packet * pkt, void
 			s_packet_wint(max_id.x);
 			s_packet_wint(max_id.y);
 			s_packet_wint(value);
+		}
+		if(p->type == S_PAXOS_PROPOSAL_RM) {
+			// send backup
+			struct s_array ** pp = s_hash_get_num(paxos->backup, p->the_serv);
+			if(pp) {
+				struct s_array * backup = *pp;
+				int i;
+				s_packet_wint(s_array_len(backup));
+				for(i = 0; i < s_array_len(backup); ++i) {
+					struct s_paxos_accept * a = s_array_at(backup, i);
+					s_packet_wstring(a->topic);
+					s_packet_wint(a->value);
+					s_packet_wint(a->id.x);
+					s_packet_wint(a->id.y);
+				}
+			} else {
+				s_packet_wint(0);
+			}
 		}
 		if(p->type != S_PAXOS_PROPOSAL_NORMAL) {
 			int id = -1;
@@ -455,8 +526,231 @@ label_error:
 	s_paxos_proposal_drop(p);
 }
 
-static void i_receive_response_rm(struct s_core * core, struct s_packet * pkt, struct s_paxos_proposal * p)
+static void ireceive_refresh_accept(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
+	struct s_core * core = ud;
+	struct s_paxos * paxos = core->paxos;
+	struct s_string * topic = NULL;
+
+	unsigned int req_id = s_packet_get_req(pkt);
+
+	int version;
+	int nserv;
+
+	s_packet_read(pkt, &version, int, label_error);
+	s_packet_read(pkt, &nserv, int, label_error);
+	int i;
+	for(i = 0; i < nserv; ++i) {
+		int serv_id;
+		s_packet_read(pkt, &serv_id, int, label_error);
+	}
+
+	if(version != paxos->version.version) {
+		s_log("[Acceptor:For Remove] Refresh Accept. BAD Version(%d != %d)", version, paxos->version.version);
+		return;
+	}
+
+	int value;
+	struct s_id id;
+	while(s_packet_read_string(pkt, &topic) >= 0) {
+		s_packet_read(pkt, &value, int, label_error);
+		s_packet_read(pkt, &id.x, int, label_error);
+		s_packet_read(pkt, &id.y, int, label_error);
+
+		// refresh accept
+		int find = 0;
+		struct s_array ** pp = s_hash_get_str(paxos->accept, topic);
+		if(pp) {
+			struct s_array * array = *pp;
+			for(i = 0; i < s_array_len(array); ++i) {
+				struct s_paxos_accept * a = s_array_at(array, i);
+				if(a->value != value) {
+					s_string_drop(a->topic);
+					s_array_rm(array, i);
+					i--;
+					continue;
+				}
+				find = 1;
+				break;
+			}
+		} else {
+			pp = s_hash_set_str(paxos->accept, topic);
+			*pp = s_array_create(sizeof(struct s_paxos_accept), 16);
+		}
+		if(!find) {
+			struct s_array * array = *pp;
+			struct s_paxos_accept * a = s_array_push(array);
+			a->topic = s_string_grab(topic);
+			a->id = id;
+			a->value = value;
+		}
+
+		// refresh backup
+		int dummy;
+		while(1) {
+			struct s_array ** pp = s_hash_next(paxos->backup, &dummy, NULL);
+			if(!pp) {
+				break;
+			}
+			struct s_array * array = *pp;
+			for(i = 0; i < s_array_len(array); ++i) {
+				struct s_paxos_accept * a = s_array_at(array, i);
+				if(s_string_equal(topic, a->topic) && a->value != value) {
+					s_string_drop(a->topic);
+					s_array_rm(array, i);
+					i--;
+					continue;
+				}
+			}
+		}
+	}
+
+	pkt = s_packet_create(0);
+	s_servg_rpc_ret(serv, req_id, pkt);
+	s_packet_drop(pkt);
+
+label_error:
+	if(topic) {
+		s_string_drop(topic);
+	}
+	return;
+}
+
+static void i_refresh_accept_back(struct s_server * serv, struct s_packet * pkt, void * ud)
+{
+	struct s_paxos_proposal * p = ud;
+	struct s_core * core = p->core;
+	struct s_paxos * paxos = core->paxos;
+
+	p->response.count--;
+	if(p->response.count == 0) {
+		// OK,  send accept to all servs
+		s_log("[Proposal:Remove Member] Phase 2 <Accept Request>, Topic:(%s), ID:(%d.%d), Value:(%d)",
+				s_string_data_p(p->topic), p->id.x, p->id.y, p->value);
+
+		s_packet_start_write(pkt, S_PKT_TYPE_PAXOS_ACCEPT)
+		{
+			s_packet_wstring(p->topic);
+			s_packet_wint(p->id.x);
+			s_packet_wint(p->id.y);
+			s_packet_wint(p->value);
+			s_packet_wint(p->version.version);
+		}
+		s_packet_end_write();
+
+		int i;
+		for(i = 0; i < paxos->version.nserv; ++i) {
+			int serv_id = paxos->version.servs[i];
+			struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, serv_id);
+			if(!serv) {
+				s_log("[Warning] s_paxos_response:send accept to serv:%d, missing!", serv_id);
+				continue;
+			}
+			s_servg_send(serv, pkt);
+		}
+
+		s_packet_drop(pkt);
+	}
+}
+
+static void i_receive_response_rm(struct s_core * core, struct s_packet * pkt, struct s_paxos_proposal * p, int serv_from)
+{
+	struct s_paxos * paxos = core->paxos;
+
+	p->response.count++;
+	struct s_string * topic = NULL;
+
+	s_log("[Proposal:Remove Member] Phase 2 <Receive Prepare Response> from :%d", serv_from);
+
+	if(pkt) {
+		int suc;
+		struct s_id max_id;
+		int value;
+		s_packet_read(pkt, &suc, int, label_error);
+		if(suc == S_PAXOS_RESPONSE_BAD_VERSION) {
+			s_log("[Proposal:Remove Member] Phase 2 <Receive Prepare Response> : Bad Version");
+			p->response.count--;
+			s_paxos_proposal_drop(p);
+			return;
+		}
+
+		if(suc == S_PAXOS_RESPONSE_VALUE) {
+			s_packet_read(pkt, &max_id.x, int, label_error);
+			s_packet_read(pkt, &max_id.y, int, label_error);
+			s_packet_read(pkt, &value, int, label_error);
+			if(s_id_gt(&max_id, &p->response.max_id)) {
+				p->response.max_id = max_id;
+				p->response.value = value;
+			}
+		}
+		// get backup
+		int nbackup;
+		s_packet_read(pkt, &nbackup, int, label_error);
+		int k;
+		for(k = 0; k < nbackup; ++k) {
+			int value;
+			struct s_id id;
+			s_packet_read(pkt, &topic, string, label_error);
+			s_packet_read(pkt, &value, int, label_error);
+			s_packet_read(pkt, &id.x, int, label_error);
+			s_packet_read(pkt, &id.y, int, label_error);
+			ilearn(core, topic, value, &id, p->the_serv);
+
+			s_string_drop(topic);
+			topic = NULL;
+		}
+
+		// get all accept
+		topic = NULL;
+		while(s_packet_read_string(pkt, &topic) >= 0) {
+			int count;
+			s_packet_read(pkt, &count, int, label_error);
+			int i;
+			for(i = 0; i < count; ++i) {
+				int value;
+				struct s_id id;
+				s_packet_read(pkt, &value, int, label_error);
+				s_packet_read(pkt, &id.x, int, label_error);
+				s_packet_read(pkt, &id.y, int, label_error);
+				ilearn(core, topic, value, &id, serv_from);
+			}
+			s_string_drop(topic);
+			topic = NULL;
+		}
+	}
+
+	if(p->response.count == p->response.nsent) {
+		if(p->response.value > 0 && p->response.value != p->value) {
+			s_log("[Proposal:Remove Member] Phase 2 <Receive Prepare Response> : conflict(%x - %x)!",
+					p->response.value, p->value);
+			return;
+		}
+
+		// every one refresh accept
+		struct s_packet * pkt = idump_learn(core, 1);
+		s_packet_set_fun(pkt, S_PKT_TYPE_PAXOS_REFRESH_ACCEPT);
+
+		int i;
+		int c = 0;
+		for(i = 0; i < paxos->version.nserv; ++i) {
+			struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, paxos->version.servs[i]);
+			if(!serv) {
+				continue;
+			}
+
+			c++;
+			s_servg_rpc_call(serv, pkt, s_paxos_proposal_grab(p), &i_refresh_accept_back, 1000);
+		}
+		p->response.count = c;
+
+		s_packet_drop(pkt);
+	}
+
+label_error:
+	if(topic) {
+		s_string_drop(topic);
+	}
+	s_paxos_proposal_drop(p);
 }
 
 static void ireceive_response(struct s_server * serv, struct s_packet * pkt, void * ud)
@@ -471,7 +765,7 @@ static void ireceive_response(struct s_server * serv, struct s_packet * pkt, voi
 		return;
 	}
 	if(p->type == S_PAXOS_PROPOSAL_RM) {
-		i_receive_response_rm(core, pkt, p);
+		i_receive_response_rm(core, pkt, p, s_servg_get_id(serv));
 		return;
 	}
 
@@ -636,6 +930,7 @@ static void iaccept(struct s_core * core, struct s_string * topic, struct s_id *
 		accept->topic = s_string_grab(topic);
 		accept->id = *id;
 		accept->value = value;
+		accept->version = paxos->version.version;
 	}
 
 	return;
@@ -647,12 +942,18 @@ static void ireceive_learn_request(struct s_server * serv, struct s_packet * pkt
 	struct s_paxos * paxos = core->paxos;
 
 	unsigned int req_id = s_packet_get_req(pkt);
+	int version;
+	if(s_packet_read_int(pkt, &version) < 0) {
+		s_log("[Acceptor:For Learner] Receive Learn Request From :%d, Missing Version!", s_servg_get_id(serv));
+		return;
+	}
 
-	s_log("[Acceptor:For Learner] Receive Learn Request From :%d", s_servg_get_id(serv));
+	s_log("[Acceptor:For Learner] Receive Learn Request From :%d, Version:%d", s_servg_get_id(serv), version);
 
 	s_packet_start_write(pkt, 0);
 	{
 	// start write packet
+	s_packet_wint(version);
 
 	struct s_hash_key key;
 	int id = -1;
@@ -692,6 +993,16 @@ static void ireceive_learn(struct s_server * serv, struct s_packet * pkt, void *
 	int value;
 	struct s_id id;
 
+	int version;
+	if(pkt) {
+		s_packet_read(pkt, &version, int, label_error);
+		s_log("[Learner] Receive Learn Response. Version:%d - %d", version, paxos->version.version);
+
+		if(version != paxos->version.version) {
+			return;
+		}
+	}
+
 	while(pkt && s_packet_read_string(pkt, &topic) >= 0) {
 		s_packet_read(pkt, &value, int, label_error);
 		s_packet_read(pkt, &id.x, int, label_error);
@@ -701,6 +1012,12 @@ static void ireceive_learn(struct s_server * serv, struct s_packet * pkt, void *
 
 		s_log("[Learner] Learn : Topic(%s) = Value(%d), From:%d",
 				s_string_data_p(topic), value, s_servg_get_id(serv));
+
+		if(version != paxos->version.version) {
+			s_log("[Learner] Receive Learn Response. Changed Version:%d --> %d",
+					version, paxos->version.version);
+			return;
+		}
 
 		s_string_drop(topic);
 		topic = NULL;
@@ -773,7 +1090,9 @@ static void icheck_new_version(struct s_core * core)
 					*pcount = 0;
 				}
 				(*pcount)++;
-				if(*pcount > paxos->version.nserv / 2) {
+				if(*pcount > paxos->version.nserv / 2 ||
+					(paxos->version.nserv == 2 && core->id == 1)
+				) {
 					s_log("[Learner] Change New Version To :%d, %x", v, value);
 					paxos->version.version = v;
 					int k;
@@ -804,8 +1123,10 @@ static struct s_packet * idump_learn(struct s_core * core, int gen_pkt)
 	struct s_paxos * paxos = core->paxos;
 	struct s_packet * pkt = NULL;
 
-	s_log("");
-	s_log("======== Dump Begin =======");
+	if(!gen_pkt) {
+		s_log("");
+		s_log("======== Dump Begin =======");
+	}
 
 	s_packet_start_write(pkt, 0)
 	{
@@ -844,7 +1165,9 @@ static struct s_packet * idump_learn(struct s_core * core, int gen_pkt)
 			}
 			(*pcount)++;
 			if(*pcount > paxos->version.nserv / 2) {
-				s_log("[LOG] Dump Learn %s : %d ( %x )", s_string_data_p(topic), value, value);
+				if(!gen_pkt) {
+					s_log("[LOG] Dump Learn %s : %d ( %x )", s_string_data_p(topic), value, value);
+				}
 				
 				s_packet_wstring(topic);
 				s_packet_wint(value);
@@ -859,9 +1182,8 @@ static struct s_packet * idump_learn(struct s_core * core, int gen_pkt)
 	}
 	s_packet_end_write();
 
-	s_log("========");
-
 	if(!gen_pkt) {
+		s_log("========");
 		s_packet_drop(pkt);
 		return NULL;
 	}

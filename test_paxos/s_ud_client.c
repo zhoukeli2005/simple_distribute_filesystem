@@ -2,6 +2,7 @@
 
 static struct timeval g_Time = {0};
 static struct timeval g_LearnTime = {0};
+static struct timeval g_CheckLeaveTime = {0};
 
 struct s_ud g_ud;
 
@@ -14,7 +15,7 @@ void s_ud_client_update(struct s_core * core, void * ud)
 {
 	if(!g_Time.tv_sec) {
 		gettimeofday(&g_Time, NULL);
-		g_Time.tv_sec -= 58;
+		g_Time.tv_sec -= 28;
 		return;
 	}
 
@@ -26,6 +27,7 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	if(sub.tv_sec > 5  && core->paxos->version.version > 0) {
 		g_LearnTime = now;
 
+		s_log("[LOG] Start Learn All, Version:%d", core->paxos->version.version);
 		s_paxos_learn_all(core);
 	}
 
@@ -44,15 +46,22 @@ void s_ud_client_update(struct s_core * core, void * ud)
 		return;
 	}
 
-	if(core->id == 1 && sub.tv_sec > 60 && s_paxos_is_in(core->paxos, core->id)) {
+	if(core->id == 1 && sub.tv_sec > 10 && s_paxos_is_in(core->paxos, core->id)) {
 
 		g_Time = now;
 
-		struct s_string * topic = s_string_create("x");
+		struct s_string * topic = s_string_create_format("x%d", rand() % 10);
 
 		static int value = 3;
 
 		s_paxos_start(core, topic, value++, S_PAXOS_PROPOSAL_NORMAL, 0);
+	}
+
+	timersub(&now, &g_CheckLeaveTime, &sub);
+	if(sub.tv_sec > 1) {
+		g_CheckLeaveTime = now;
+
+		s_paxos_check_leave(core);
 	}
 }
 
