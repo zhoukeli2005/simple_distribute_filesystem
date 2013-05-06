@@ -60,10 +60,13 @@ int main(int argc, char * argv[])
 		.config = config
 	};
 
+	int timeout = 5;
+
 	/* 4.1 -- if it's client, do client init -- */
 	if(type == S_SERV_TYPE_C) {
 		create_param.all_established = s_ud_client_init;
 		create_param.update = s_ud_client_update;
+		timeout = 0;
 	}
 
 	struct s_core * core = s_core_create(&create_param);
@@ -78,7 +81,7 @@ int main(int argc, char * argv[])
 	/* 5 -- do main process -- */
 	while(1) {
 		/* 1. do servg stuff */
-		if(s_core_poll(core, 10) < 0) {
+		if(s_core_poll(core, timeout) < 0) {
 			s_log("[Error] s_core_poll error!");
 			break;
 		}

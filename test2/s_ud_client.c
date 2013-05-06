@@ -37,6 +37,7 @@ static int irand_serv(int * out)
 	int i = k++;
 		
 	k %= 6;
+	i = 0;
 
 	memcpy(out, serv[i], sizeof(int) * 5); 
 
@@ -63,6 +64,8 @@ void * s_ud_client_init(struct s_core * core)
 		exit(0);
 	}
 
+	s_log("[LOG] MaxTry:%d", MaxTry);
+
 	return NULL;
 }
 
@@ -72,24 +75,29 @@ void s_ud_client_update(struct s_core * core, void * ud)
 		return;
 	}
 
-	if(gcount >= MaxTry) {
-		return;
-	}
-
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
+label_loop:
 
-	struct timeval ret;
-	timersub(&tv, &gtv, &ret);
-
-	if(ret.tv_usec < 10) {
+	if(gcount >= MaxTry) {
+		ginit = 0;
+		gettimeofday(&g_tv_start, NULL);
 		return;
 	}
 
-	gtv = tv;
+//	struct timeval tv;
+//	gettimeofday(&tv, NULL);
+
+//	struct timeval ret;
+//	timersub(&tv, &gtv, &ret);
+
+//	if(ret.tv_usec < 0) {
+//		return;
+//	}
+
+//	gtv = tv;
 
 	struct s_packet * pkt;
-//	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_PUSH_DATA, 3 * 1024 * 1024);
 	struct s_glock_client * c = s_malloc(struct s_glock_client, 1);
 
 	c->id.x = core->id;
@@ -99,9 +107,6 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	c->core = core;
 
 
-//	s_packet_write_int(pkt, c->id.x);
-//	s_packet_write_int(pkt, c->id.y);
-
 	int servs[32];
 	int nserv = 0;
 
@@ -110,18 +115,10 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	int i;
 	for(i = 0; i < 5; ++i) {
 		int serv_id = servs[i];
-/*		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_D, serv_id);
-		if(!serv) {
-			s_log("[LOG] missing dserv:%d", serv_id);
-			continue;
-		}
-		s_servg_send(serv, pkt);*/
 		if(serv_id > 0) {
 			c->lock |= 1 << serv_id;
 		}
 	}
-//	s_packet_drop(pkt);
-	//s_log("start to write id(%d,%d) lock:%x ...", c->id.x, c->id.y, c->lock);
 
 	struct s_server * mserv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, 1);
 	if(!mserv) {
@@ -143,9 +140,7 @@ void s_ud_client_update(struct s_core * core, void * ud)
 	s_packet_drop(pkt);
 
 	gcount++;
-	if(gcount == 1) {
-		g_tv_start = tv;
-	}
+	goto label_loop;
 }
 
 static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * ud)
@@ -189,7 +184,7 @@ static void write_callback(struct s_server * serv, struct s_packet * pkt, void *
 
 	c->lock &= ~( 1 << id );
 
-	//s_log("write callback now:%d.%d, from:%d, lock:%x", c->id.x, c->id.y, id, c->lock);
+//	s_log("write callback now:%d.%d, from:%d, lock:%x", c->id.x, c->id.y, id, c->lock);
 
 	if(c->lock == 0) {
 	//	s_log("[LOG] write finished! unlock:%d.%d", c->id.x, c->id.y);
@@ -211,17 +206,27 @@ static void write_callback(struct s_server * serv, struct s_packet * pkt, void *
 
 		s_free(c);
 
-		struct timeval tv, ret;
-		gettimeofday(&tv, NULL);
-		timersub(&tv, &c->tv, &ret);
+	//	timersub(&tv, &c->tv, &ret);
 	//	s_log("[LOG] id(%d.%d) time comsume: %lu.%lu", c->id.x, c->id.y, ret.tv_sec, ret.tv_usec);
 
+		struct timeval tv, ret;
+		gettimeofday(&tv, NULL);
 		timersub(&tv, &g_tv_start, &ret);
 	
 		static int C = 0;
 		C++;
+
+		static double lastT = 0;
+		double currT = ret.tv_sec + ret.tv_usec * 1.0f / 1000000;
+
+		s_log("[LOG] Count:%d, total time consume: %f", C, currT - lastT);
+		lastT = currT;
+
 		if(C >= MaxTry) {
-			s_log("[LOG] total time consume: %lu.%lu", ret.tv_sec, ret.tv_usec);
+			s_log("[LOG] total time consume: %f", (ret.tv_sec + ret.tv_usec * 1.0f / 1000000));
+		//	s_log("[LOG] start(%ld, %ld), now(%ld, %ld)", 
+		//			g_tv_start.tv_sec, g_tv_start.tv_usec,
+		//			tv.tv_sec, tv.tv_usec);
 		}
 
 	}

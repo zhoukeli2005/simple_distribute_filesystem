@@ -61,6 +61,13 @@ s_lock_queue_destroy( struct s_lock_queue * q )
 
 static struct s_lockq_elem * iget_free_elem(struct s_lock_queue * q)
 {
+#define MAX_BUF 10000000
+	static struct s_lockq_elem g_buf[MAX_BUF];
+	static int c = 0;
+	return &g_buf[c++];
+
+//	return s_malloc(struct s_lockq_elem, 1);
+	
 	pthread_mutex_lock(&q->free_m);
 
 	struct s_lockq_elem * elem;
@@ -82,6 +89,9 @@ static struct s_lockq_elem * iget_free_elem(struct s_lock_queue * q)
 
 static void ifree_elem(struct s_lock_queue * q, struct s_lockq_elem * elem)
 {
+//	s_free(elem);
+	return;
+	
 	q->nfree++;
 	pthread_mutex_lock(&q->free_m);
 
