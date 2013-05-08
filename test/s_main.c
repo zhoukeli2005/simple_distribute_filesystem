@@ -180,6 +180,7 @@ void * s_msq_read(void * d)
 	s_log("[msq read] time comsume : %ld s %ld us, loop: %d , loop_v:%d", tv.tv_sec, tv.tv_usec, count, count_val);
 
 //	s_lock_queue_dump_stat(q);
+	ms_queue_dump_stat(q);
 
 	return NULL;
 }
@@ -216,10 +217,10 @@ int main(int argc, char * argv[])
 		pthread_join(s_msq_write_t, NULL);
 	}
 
-	// Test Lock-Queue
+	// Test Mutex Lock-Queue
 	if(C == 3)
 	{
-		struct s_lock_queue * q = s_lock_queue_create();
+		struct s_lock_queue * q = s_lock_queue_create(1);
 
 		pthread_t s_lockq_read_t, s_lockq_write_t;
 		pthread_create(&s_lockq_write_t, NULL, &s_lockq_write, q);
@@ -229,6 +230,19 @@ int main(int argc, char * argv[])
 		pthread_join(s_lockq_write_t, NULL);
 	}
 	
+	// Test Spin Lock-Queue
+	if(C == 4)
+	{
+		struct s_lock_queue * q = s_lock_queue_create(0);
+
+		pthread_t s_lockq_read_t, s_lockq_write_t;
+		pthread_create(&s_lockq_write_t, NULL, &s_lockq_write, q);
+		pthread_create(&s_lockq_read_t, NULL, &s_lockq_read, q);
+
+		pthread_join(s_lockq_read_t, NULL);
+		pthread_join(s_lockq_write_t, NULL);
+	}
+
 	return 0;
 }
 

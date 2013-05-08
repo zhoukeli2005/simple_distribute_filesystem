@@ -4,6 +4,8 @@
 
 //#define USE_DEF_CAS
 
+static int cas_failed = 0;
+
 #ifdef USE_GCC_CAS
 
 #define CAS __sync_bool_compare_and_swap 
@@ -42,6 +44,10 @@ static inline int CAS(struct ms_pointer * ptr, struct ms_pointer old, struct ms_
 			:"=m"(ret), "+m"(*(volatile struct ms_pointer *)ptr)
 			:"a"(old.ptr), "d"(old.tag), "b"(new.ptr), "c"(new.tag)
 			:"memory");
+		if(!ret) {
+			cas_failed++;
+		}
+
 		return ret;
 	}
 
@@ -87,7 +93,7 @@ static struct ms_node * _new_node()
 		node_sz = (node_sz + 0xF) & ~0xF;
 		int sz = node_sz * MAX_BUF + 16;
 		g_buf = malloc(sz);
-		g_buf = ((size_t)g_buf + 0xF) & ~0xF;
+		g_buf = (char *)(((size_t)g_buf + 0xF) & ~0xF);
 	}
 	char * p = g_buf + c * node_sz;
 	c++;
@@ -175,5 +181,10 @@ int ms_queue_pop(struct ms_queue * q)
 	}
 	_free_node(head.ptr);
 	return ret;
+}
+
+void ms_queue_dump_stat(struct ms_queue * q)
+{
+	s_log("[CAS Failed] %d", cas_failed);
 }
 

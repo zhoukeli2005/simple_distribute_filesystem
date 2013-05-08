@@ -38,5 +38,8 @@ ms_queue_push(struct ms_queue * q, int v);
 int
 ms_queue_pop(struct ms_queue * q);
 
+void
+ms_queue_dump_stat(struct ms_queue * q);
+
 #endif
 

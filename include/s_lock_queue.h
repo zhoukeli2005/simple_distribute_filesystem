@@ -4,7 +4,7 @@
 struct s_lock_queue;
 
 struct s_lock_queue *
-s_lock_queue_create( void );
+s_lock_queue_create( int use_mutex );
 
 void
 s_lock_queue_destroy( struct s_lock_queue * q );

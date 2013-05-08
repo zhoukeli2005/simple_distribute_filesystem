@@ -13,6 +13,9 @@ struct s_lockq_elem {
 
 struct s_lock_queue {
 	pthread_mutex_t m;
+	pthread_spinlock_t sl;
+
+	int use_mutex;
 	
 	struct s_list elem_head;
 
@@ -27,11 +30,14 @@ struct s_lock_queue {
 };
 
 struct s_lock_queue *
-s_lock_queue_create( void )
+s_lock_queue_create( int use_mutex )
 {
 	struct s_lock_queue * q = s_malloc(struct s_lock_queue, 1);
 	
 	pthread_mutex_init(&q->m, NULL);
+	pthread_spin_init(&q->sl, 0);
+
+	q->use_mutex = use_mutex;
 
 	s_list_init(&q->elem_head);
 
@@ -102,7 +108,11 @@ static void ifree_elem(struct s_lock_queue * q, struct s_lockq_elem * elem)
 
 void s_lock_queue_push(struct s_lock_queue * q, void * d)
 {
-	pthread_mutex_lock(&q->m);
+	if(q->use_mutex) {
+		pthread_mutex_lock(&q->m);
+	} else {
+		pthread_spin_lock(&q->sl);
+	}
 
 	struct s_lockq_elem * elem = iget_free_elem(q);
 
@@ -110,12 +120,20 @@ void s_lock_queue_push(struct s_lock_queue * q, void * d)
 
 	s_list_insert_tail(&q->elem_head, &elem->link);
 
-	pthread_mutex_unlock(&q->m);
+	if(q->use_mutex) {
+		pthread_mutex_unlock(&q->m);
+	} else {
+		pthread_spin_unlock(&q->sl);
+	}
 }
 
 void * s_lock_queue_pop(struct s_lock_queue * q)
 {
-	pthread_mutex_lock(&q->m);
+	if(q->use_mutex) {
+		pthread_mutex_lock(&q->m);
+	} else {
+		pthread_spin_lock(&q->sl);
+	}
 
 	void * data = NULL;
 	if(!s_list_empty(&q->elem_head)) {
@@ -125,7 +143,11 @@ void * s_lock_queue_pop(struct s_lock_queue * q)
 		ifree_elem(q, elem);
 	}
 
-	pthread_mutex_unlock(&q->m);
+	if(q->use_mutex) {
+		pthread_mutex_unlock(&q->m);
+	} else {
+		pthread_spin_unlock(&q->sl);
+	}
 
 	return data;
 }
