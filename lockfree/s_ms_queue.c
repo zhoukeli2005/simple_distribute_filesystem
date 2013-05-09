@@ -2,7 +2,7 @@
 #include <s_common.h>
 #include <s_mem.h>
 
-//#define USE_DEF_CAS
+#define USE_DEF_CAS
 
 static int cas_failed = 0;
 
