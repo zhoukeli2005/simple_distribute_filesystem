@@ -1,9 +1,10 @@
 # inherit CC CFLAGS LFLAGS AR NETLIB from parent Makefile
 
-CFLAGS += -I/usr/include/zookeeper
-LFLAGS += -lzookeeper_mt
+CFLAGS += -I../include/
 
 OBJS = s_main.o
+
+LIBS = ../$(LIB)
 
 TEST = s_test
 

@@ -1,3 +1,74 @@
+#include <s_zookeeper.h>
+
+struct thread_ctx {
+	pthread_t thread;
+	int id;
+	struct s_zoo * z;
+};
+
+struct lock_ctx {
+	int tid;
+	int lid;
+};
+
+void lock_complete(struct s_zoo * z, void * d, const char * lock_path)
+{
+	struct lock_ctx * lc = d;
+	s_log("get lock, (%d,%d), %s", lc->tid, lc->lid, lock_path);
+	s_zoo_unlock(z, lock_path);
+	s_log("unlock, (%d, %d), %s", lc->tid, lc->lid, lock_path);
+}
+
+void * lock_thread(void * d)
+{
+	struct thread_ctx * ctx = d;
+	struct s_zoo * z = ctx->z;
+
+	int c = 0;
+
+	while(1) {
+
+		struct lock_ctx * lc = s_malloc(struct lock_ctx, 1);
+		lc->tid = ctx->id;
+		lc->lid = ++c;
+
+		s_log("start lock, (%d,%d) ... ", lc->tid, lc->lid);
+
+		s_zoo_lock(z, "mylock", &lock_complete, lc);
+
+		break;
+		sleep(5);
+	}
+
+	while(1) {
+		sleep(1);
+	}
+
+	return NULL;
+}
+
+int main(int argc, char * argv[])
+{
+	struct s_zoo * z = s_zoo_init("127.0.0.1:2181");
+
+
+	struct thread_ctx thread[5];
+	int i;
+	for(i = 0; i < 5; ++i) {
+		struct thread_ctx * ctx = &thread[i];
+		ctx->id = i + 1;
+		ctx->z = z;
+		pthread_create(&ctx->thread, NULL, &lock_thread, ctx);
+	}
+
+	for(i = 0; i < 5; ++i) {
+		pthread_join(thread[i].thread, NULL);
+	}
+
+	return 0;
+}
+
+/*
 #include <zookeeper.h>
 #include <zookeeper.jute.h>
 #include "zookeeper.h"
@@ -17,6 +88,10 @@ static void zk_watcher(zhandle_t * zk, int type, int state, const char * path, v
 	struct context * c = (struct context *)ctx;
 }
 
+static void lock(const char * filename)
+{
+}
+
 int main(int argc, char * argv[])
 {
 	struct context ctx;
@@ -27,6 +102,7 @@ int main(int argc, char * argv[])
 		// wait for session connected
 	}
 
+	// 1. create /lock
 	{
 		char path_buf[128];
 		int r = zoo_create(zk, "/lock", NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, path_buf, 128);
@@ -134,3 +210,4 @@ static void print_error(int e)
 	printf("\n");
 #undef CASE_PRINT
 }
+*/

@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -O0 -g -DS_DEBUG -Wall
-LFLAGS = -lpthread
+CFLAGS = -O0 -g -DS_DEBUG -Wall -I/usr/include/zookeeper/
+LFLAGS = -lpthread -lzookeeper_mt
 AR = ar
 
 # libs
@@ -33,10 +33,12 @@ all:
 	make -C ./fs
 	make -C ./serv_group
 	make -C ./core
+	make -C ./zookeeper
 	ar -r $(LIB) $(OBJS)
 #	make -C ./server
-	make -C ./test
-	make -C ./test_cas
+#	make -C ./test
+#	make -C ./test_cas
+	make -C ./test_zookeeper
 #	make -C ./test2
 #	make -C ./test3
 #	make -C ./test_paxos
@@ -50,9 +52,11 @@ clean:
 	make -C ./fs clean
 	make -C ./serv_group clean
 	make -C ./core clean
+	make -C ./zookeeper clean
 	make -C ./server clean
 	make -C ./test clean
 	make -C ./test_cas clean
+	make -C ./test_zookeeper clean
 	make -C ./test2 clean
 	make -C ./test3 clean
 	make -C ./test_paxos clean
