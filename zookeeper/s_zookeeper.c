@@ -5,10 +5,14 @@ static void print_event(int type, int state, const char * path);
 
 struct s_zoo g_zoo;
 pthread_mutex_t lock_m;	// for s_zoo_lock
+pthread_mutex_t lockv_m;// for s_zoo_lockv
+pthread_mutex_t sync_m;// for s_zoo_sync
 
 #define MAX_FILENAME_LEN	256
 #define LOCK_ROOT	"/lock"
 #define LOCK_ROOT_LEN	5
+#define SYNC_ROOT	"/sync"
+#define SYNC_ROOT_LEN	5
 
 struct s_zoo_lock_elem {
 	struct s_zoo * z;
@@ -18,6 +22,16 @@ struct s_zoo_lock_elem {
 	char lock_path[MAX_FILENAME_LEN];
 
 	lock_complete_t callback;
+};
+
+struct s_zoo_sync_elem {
+	struct s_zoo * z;
+	void * d;
+	s_sync_t callback;
+	int nprocess;
+
+	char parent_path[MAX_FILENAME_LEN];
+	char lock_path[MAX_FILENAME_LEN];
 };
 
 static int try_lock(struct s_zoo * z, const char * parent_path, const char * lock_path)
@@ -38,6 +52,21 @@ static int try_lock(struct s_zoo * z, const char * parent_path, const char * loc
 	}
 
 	if(min_str && (strcmp(min_str, lock_path) == 0)) {
+		return 1;
+	}
+
+	return 0;
+}
+
+static int try_sync(struct s_zoo * z, const char * parent_path, int nprocess)
+{
+	struct String_vector v;
+	int r = zoo_get_children(z->zk, parent_path, 0, &v);
+	if(r != ZOK) {
+		print_error(r);
+		return 0;
+	}
+	if(v.count >= nprocess) {
 		return 1;
 	}
 
@@ -76,7 +105,15 @@ struct s_zoo * s_zoo_init(const char * host)
 		print_error(r);
 	}
 
+	// create '/sync'
+	r = zoo_create(z->zk, SYNC_ROOT, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, path, MAX_FILENAME_LEN);
+	if(r != ZOK && r != ZNODEEXISTS) {
+		print_error(r);
+	}
+
 	pthread_mutex_init(&lock_m, NULL);
+	pthread_mutex_init(&lockv_m, NULL);
+	pthread_mutex_init(&sync_m, NULL);
 
 	return z;
 }
@@ -138,8 +175,10 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 
 		if(try_lock(z, path, path_created)) {
 			// lock ok
+			pthread_mutex_unlock(&lock_m);
+
 			callback(z, d, path_created);
-			goto label_end;
+			return;
 		}
 
 		// not lock
@@ -168,6 +207,7 @@ struct s_zoo_lock_vector * s_zoo_lockv_create(struct s_zoo * z)
 	v->z = z;
 	v->count = 0;
 	v->filenames = NULL;
+	v->lock_path = NULL;
 	v->size = 0;
 	v->curr = 0;
 
@@ -197,12 +237,15 @@ void s_zoo_lockv_free(struct s_zoo_lock_vector * v)
 	if(v->filenames) {
 		s_free(v->filenames);
 	}
+	if(v->lock_path) {
+		s_free(v->lock_path);
+	}
 	s_free(v);
 }
 
 static void lockv_callback(struct s_zoo * z, void * d, const char * file)
 {
-	printf("get lock:%s\n", file);
+//	printf("get lock:%s\n", file);
 
 	struct s_zoo_lock_vector * v = d;
 
@@ -210,7 +253,7 @@ static void lockv_callback(struct s_zoo * z, void * d, const char * file)
 	if(v->curr >= v->count) {
 		printf("get all! callback!\n");
 
-		v->callback(z, d, v);
+		v->callback(z, v->d, v);
 		return;
 	}
 	s_zoo_lock(z, v->filenames[v->curr], &lockv_callback, v);
@@ -218,23 +261,109 @@ static void lockv_callback(struct s_zoo * z, void * d, const char * file)
 
 void s_zoo_lockv(struct s_zoo * z, struct s_zoo_lock_vector * v, lockv_complete_t callback, void * d)
 {
-	pthread_mutex_lock(&lock_m);
+	pthread_mutex_lock(&lockv_m);
 
 	v->callback = callback;
 	v->d = d;
 
 	if(v->count <= 0) {
 		printf("[Warning] s_zoo_lockv : count(%d) <= 0!\n", v->count);
+		pthread_mutex_unlock(&lockv_m);
+
 		callback(z, d, v);
-		goto label_end;
+		return;
 	}
 
 	v->lock_path = s_malloc(const char *, v->count);
 	v->curr = 0;
 	s_zoo_lock(z, v->filenames[0], &lockv_callback, v);
 
+	pthread_mutex_unlock(&lockv_m);
+}
+
+void s_zoo_unlockv(struct s_zoo * z, struct s_zoo_lock_vector * v)
+{
+	int i;
+	for(i = 0; i < v->count; ++i) {
+		s_zoo_unlock(z, v->lock_path[i]);
+	}
+}
+
+void s_zoo_sync(struct s_zoo * z, int nprocess, const char * id)
+{
+	static char path[MAX_FILENAME_LEN] = {0};
+	static char path_created[MAX_FILENAME_LEN] = {0};
+
+	pthread_mutex_lock(&sync_m);
+
+	int fnlen = strlen(id);
+	int r;
+
+
+	// 1. init static path "/lock/"
+	{
+		if(path[0] == 0) {
+			memcpy(path, SYNC_ROOT, SYNC_ROOT_LEN);
+		}
+		path[SYNC_ROOT_LEN] = '/';
+	}
+
+	// 2. create node "/id/"
+	{
+		if(fnlen + SYNC_ROOT_LEN + 1 >= MAX_FILENAME_LEN - 1) {
+			printf("[Error]s_zoo_sync, id(%s) too long(%d)!\n", id, fnlen);
+			goto label_end;
+		}
+		memcpy(path + SYNC_ROOT_LEN + 1, id, fnlen + 1);
+
+		r = zoo_create(z->zk, path, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, path_created, MAX_FILENAME_LEN);
+		if(r != ZOK && r != ZNODEEXISTS) {
+			printf("[Error]s_zoo_sync, create parent node:%s Error!\n", path);
+			print_error(r);
+			goto label_end;
+		}
+	}
+
+
+	// 3. create node "/id/seq"
+	{
+		path[SYNC_ROOT_LEN + 1 + fnlen] = '/';
+		r = zoo_create(z->zk, path, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL|ZOO_SEQUENCE, path_created, MAX_FILENAME_LEN);
+		if(r != ZOK) {
+			printf("[Error]s_zoo_sync: create lock node:%s Error!\n", path);
+			print_error(r);
+			goto label_end;
+		}
+
+		const char * sep = strrchr(path_created, '/');
+		sep++;	// skip '/'
+		memmove(path_created, sep, strlen(sep) + 1);
+	}
+
+	// 4. check sync
+	{
+		path[SYNC_ROOT_LEN + 1 + fnlen] = 0;
+
+		char * p = s_malloc(char, SYNC_ROOT_LEN + 1 + fnlen + 1);
+		memcpy(p, path, SYNC_ROOT_LEN + 1 + fnlen + 1);
+
+		pthread_mutex_unlock(&sync_m);
+
+		while(!try_sync(z, p, nprocess)) {
+			// sync not ok
+			struct timespec tp = { .tv_nsec = 10 };
+			nanosleep(&tp, NULL);
+		}
+
+		pthread_mutex_lock(&sync_m);
+		s_free(p);
+		pthread_mutex_unlock(&sync_m);
+
+		return;
+	}
+
 label_end:
-	pthread_mutex_unlock(&lock_m);
+	pthread_mutex_unlock(&sync_m);
 }
 
 static void print_event(int type, int state, const char * path)

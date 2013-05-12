@@ -14,6 +14,11 @@ struct s_zoo {
 struct s_zoo *
 s_zoo_init(const char * host);
 
+/*
+ *	lock
+ *
+ */
+
 typedef void(*lock_complete_t)(struct s_zoo * z, void * d, const char * lock_path);
 
 void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callback, void * d);
@@ -21,7 +26,6 @@ void s_zoo_unlock(struct s_zoo * z, const char * lock_path);
 
 /*
  *	lock vector
- *
  *
  */
 struct s_zoo_lock_vector;
@@ -58,6 +62,14 @@ s_zoo_unlockv(struct s_zoo * z, struct s_zoo_lock_vector * v);
 
 void
 s_zoo_lockv_free(struct s_zoo_lock_vector * v);
+
+/*
+ *	Process Sync
+ *
+ */
+typedef void(*s_sync_t)(struct s_zoo * z, void * d);
+void
+s_zoo_sync(struct s_zoo * z, int nprocess, const char * id);
 
 #endif
 

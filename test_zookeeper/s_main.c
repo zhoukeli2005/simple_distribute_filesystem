@@ -11,18 +11,36 @@ struct lock_ctx {
 	int lid;
 };
 
-void lock_complete(struct s_zoo * z, void * d, const char * lock_path)
+void lock_complete(struct s_zoo * z, void * d, struct s_zoo_lock_vector * v)
 {
 	struct lock_ctx * lc = d;
-	s_log("get lock, (%d,%d), %s", lc->tid, lc->lid, lock_path);
-	s_zoo_unlock(z, lock_path);
-	s_log("unlock, (%d, %d), %s", lc->tid, lc->lid, lock_path);
+	s_log("get lockv, (%d,%d)", lc->tid, lc->lid);
+	int i;
+	for(i = 0; i < v->count; ++i) {
+		s_log("%s, %s", v->filenames[i], v->lock_path[i]);
+	}
+	s_zoo_unlockv(z, v);
+	s_zoo_lockv_free(v);
+	s_log("unlockv, (%d, %d)", lc->tid, lc->lid);
+}
+
+static void sync_end(struct s_zoo * z, void * d)
+{
+	struct thread_ctx * ctx = d;
+	s_log("sync end:%d", ctx->id);
+
 }
 
 void * lock_thread(void * d)
 {
 	struct thread_ctx * ctx = d;
 	struct s_zoo * z = ctx->z;
+	s_log("start sync:%d...", ctx->id);
+	s_zoo_sync(z, 5, "sync1");
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	s_log("time:%ld s %ld us", tv.tv_sec, tv.tv_usec);
+	/*
 
 	int c = 0;
 
@@ -32,13 +50,18 @@ void * lock_thread(void * d)
 		lc->tid = ctx->id;
 		lc->lid = ++c;
 
-		s_log("start lock, (%d,%d) ... ", lc->tid, lc->lid);
+		s_log("start lockv, (%d,%d) ... ", lc->tid, lc->lid);
 
-		s_zoo_lock(z, "mylock", &lock_complete, lc);
+		struct s_zoo_lock_vector * v = s_zoo_lockv_create(z);
+		s_zoo_lockv_add(v, "lock1");
+		s_zoo_lockv_add(v, "lock2");
+		s_zoo_lockv_add(v, "lock3");
+
+		s_zoo_lockv(z, v, &lock_complete, lc);
 
 		break;
 		sleep(5);
-	}
+	}*/
 
 	while(1) {
 		sleep(1);
