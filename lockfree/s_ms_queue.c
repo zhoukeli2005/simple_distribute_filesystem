@@ -2,32 +2,23 @@
 #include <s_common.h>
 #include <s_mem.h>
 
-#define USE_DEF_CAS
-
 static int cas_failed = 0;
 
-#ifdef USE_GCC_CAS
-
-#define CAS __sync_bool_compare_and_swap 
-
-
-#elif defined USE_DEF_CAS
-
+// 32位机器需要用cmpxchg8b，64位机器需要用cmpxchg16b
 #define CAS(_ptr, old, new) 							\
 ({										\
  	struct ms_pointer * __ptr = _ptr;					\
 	struct ms_pointer __old = (old);					\
 	struct ms_pointer __new = (new);					\
 	int __ret;								\
-	asm volatile("lock cmpxchg16b %1; sete %0"				\
+	asm volatile("lock cmpxchg8b %1; sete %0"				\
 		:"=m"(__ret),"+m"(*(volatile struct ms_pointer *)__ptr)		\
 		:"a"(__old.ptr),"d"(__old.tag),"b"(__new.ptr),"c"(__new.tag)	\
 		:"memory");							\
 	__ret;									\
 })
 
-#else
-
+/*
 static inline int CAS(struct ms_pointer * ptr, struct ms_pointer old, struct ms_pointer new)
 {
 	int ret;
@@ -53,9 +44,7 @@ static inline int CAS(struct ms_pointer * ptr, struct ms_pointer old, struct ms_
 
 	s_log("CAS Error! Wrong size:%lu", sizeof(*ptr));
 	return -1;
-}
-
-#endif
+}*/
 
 #define ms_equal_pointer(p1, p2)	\
 	(((p1)->ptr == (p2)->ptr) && ((p1)->tag == (p2)->tag))
