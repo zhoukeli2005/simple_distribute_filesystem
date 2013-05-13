@@ -8,12 +8,12 @@ pthread_mutex_t lock_m;	// for s_zoo_lock
 pthread_mutex_t lockv_m;// for s_zoo_lockv
 pthread_mutex_t sync_m;// for s_zoo_sync
 
-#define MAX_FILENAME_LEN	256
 #define LOCK_ROOT	"/lock"
 #define LOCK_ROOT_LEN	5
 #define SYNC_ROOT	"/sync"
 #define SYNC_ROOT_LEN	5
 
+/*
 struct s_zoo_lock_elem {
 	struct s_zoo * z;
 	void * d;
@@ -22,17 +22,7 @@ struct s_zoo_lock_elem {
 	char lock_path[MAX_FILENAME_LEN];
 
 	lock_complete_t callback;
-};
-
-struct s_zoo_sync_elem {
-	struct s_zoo * z;
-	void * d;
-	s_sync_t callback;
-	int nprocess;
-
-	char parent_path[MAX_FILENAME_LEN];
-	char lock_path[MAX_FILENAME_LEN];
-};
+};*/
 
 static int try_lock(struct s_zoo * z, const char * parent_path, const char * lock_path)
 {
@@ -82,8 +72,7 @@ static void lock_watcher(zhandle_t * zk, int type, int state, const char * path,
 	if(try_lock(z, elem->parent_path, elem->lock_path)) {
 		void * d = elem->d;
 		lock_complete_t callback = elem->callback;
-		callback(z, d, elem->lock_path);
-		s_free(elem);
+		callback(z, d, elem);
 		return;
 	}
 
@@ -173,21 +162,22 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 	{
 		path[LOCK_ROOT_LEN + 1 + fnlen] = 0;
 
-		if(try_lock(z, path, path_created)) {
-			// lock ok
-			pthread_mutex_unlock(&lock_m);
-
-			callback(z, d, path_created);
-			return;
-		}
-
-		// not lock
 		struct s_zoo_lock_elem * elem = s_malloc(struct s_zoo_lock_elem, 1);
 		elem->z = z;
 		elem->d = d;
 		elem->callback = callback;
 		memcpy(elem->parent_path, path, strlen(path) + 1);
 		memcpy(elem->lock_path, path_created, strlen(path_created) + 1);
+
+		if(try_lock(z, elem->parent_path, elem->lock_path)) {
+			// lock ok
+			pthread_mutex_unlock(&lock_m);
+
+			callback(z, d, elem);
+			return;
+		}
+
+		// not lock
 		
 		zoo_wexists(z->zk, elem->parent_path, &lock_watcher, elem, NULL);
 	}
@@ -196,9 +186,10 @@ label_end:
 	pthread_mutex_unlock(&lock_m);
 }
 
-void s_zoo_unlock(struct s_zoo * z, const char * lock_path)
+void s_zoo_unlock(struct s_zoo * z, struct s_zoo_lock_elem * elem)
 {
-	zoo_delete(z->zk, lock_path, -1);
+	zoo_delete(z->zk, elem->lock_path, -1);
+	s_free(elem);
 }
 
 struct s_zoo_lock_vector * s_zoo_lockv_create(struct s_zoo * z)
@@ -207,7 +198,7 @@ struct s_zoo_lock_vector * s_zoo_lockv_create(struct s_zoo * z)
 	v->z = z;
 	v->count = 0;
 	v->filenames = NULL;
-	v->lock_path = NULL;
+	v->lock_elems = NULL;
 	v->size = 0;
 	v->curr = 0;
 
@@ -229,27 +220,37 @@ void s_zoo_lockv_add(struct s_zoo_lock_vector * v, const char * filename)
 		}
 		v->size = newsize;
 	}
-	v->filenames[v->count++] = filename;
+	v->filenames[v->count++] = strdup(filename);
 }
 
 void s_zoo_lockv_free(struct s_zoo_lock_vector * v)
 {
 	if(v->filenames) {
+		int i;
+		for(i = 0; i < v->count; ++i) {
+			s_free((void*)(v->filenames[i]));
+		}
 		s_free(v->filenames);
 	}
-	if(v->lock_path) {
-		s_free(v->lock_path);
+	if(v->lock_elems) {
+		int i;
+		for(i = 0; i < v->count; ++i) {
+			if(v->lock_elems[i]) {
+				s_free(v->lock_elems[i]);
+			}
+		}
+		s_free(v->lock_elems);
 	}
 	s_free(v);
 }
 
-static void lockv_callback(struct s_zoo * z, void * d, const char * file)
+static void lockv_callback(struct s_zoo * z, void * d, struct s_zoo_lock_elem * elem)
 {
 //	printf("get lock:%s\n", file);
 
 	struct s_zoo_lock_vector * v = d;
 
-	v->lock_path[v->curr++] = file;
+	v->lock_elems[v->curr++] = elem;
 	if(v->curr >= v->count) {
 		printf("get all! callback!\n");
 
@@ -274,7 +275,7 @@ void s_zoo_lockv(struct s_zoo * z, struct s_zoo_lock_vector * v, lockv_complete_
 		return;
 	}
 
-	v->lock_path = s_malloc(const char *, v->count);
+	v->lock_elems = s_malloc(struct s_zoo_lock_elem *, v->count);
 	v->curr = 0;
 	s_zoo_lock(z, v->filenames[0], &lockv_callback, v);
 
@@ -285,7 +286,8 @@ void s_zoo_unlockv(struct s_zoo * z, struct s_zoo_lock_vector * v)
 {
 	int i;
 	for(i = 0; i < v->count; ++i) {
-		s_zoo_unlock(z, v->lock_path[i]);
+		s_zoo_unlock(z, v->lock_elems[i]);
+		v->lock_elems[i] = NULL;
 	}
 }
 

@@ -1,7 +1,7 @@
 #include "s_server.h"
 #include "s_access_id.h"
 
-static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * udata);
+static void lock_callback(struct s_zoo * z, void * d, struct s_zoo_lock_vector * v);
 static void write_callback(struct s_server * serv, struct s_packet * pkt, void * udata);
 
 struct s_glock_client {
@@ -11,6 +11,8 @@ struct s_glock_client {
 
 	struct s_id id;
 	unsigned int lock;
+
+	struct s_zoo_lock_vector * v;
 
 	struct timeval tv;
 };
@@ -23,11 +25,10 @@ static int gid;
 static int ginit = 0;
 static int gcount = 0;
 
-static struct timeval g_tv_start;
-
 static struct s_zoo * g_zoo;
 static struct s_array * g_access_id;
 
+/*
 static int irand_serv(int * out)
 {
 	static int k = 0;
@@ -49,6 +50,43 @@ static int irand_serv(int * out)
 	memcpy(out, serv[i], sizeof(int) * 5); 
 
 	return 3;
+}*/
+
+static void access_data(struct s_core * core)
+{
+	static char buf[256];
+
+	gcount++;
+
+	int idx = (core->id - 1) * 100 + gcount;
+
+	struct s_array ** pp = s_array_at(g_access_id, idx);
+	struct s_array * D = *pp;
+
+	struct s_zoo_lock_vector * v = s_zoo_lockv_create(g_zoo);
+
+	struct s_glock_client * c = s_malloc(struct s_glock_client, 1);
+	c->core = core;
+	c->id.x = core->id;
+	c->id.y = gid++;
+	c->v = v;
+	c->lock = 0;
+	gettimeofday(&c->tv, NULL);
+
+	int i;
+	for(i = 0; i < s_array_len(D); ++i) {
+		int * pd = s_array_at(D, i);
+		int d = *pd;
+		s_log("data:%d", d);
+
+		sprintf(buf, "%d", d);
+		
+		s_zoo_lockv_add(v, buf);
+
+		c->lock |= 1 << d;
+	}
+
+	s_zoo_lockv(g_zoo, v, &lock_callback, c);
 }
 
 
@@ -93,10 +131,18 @@ void * s_ud_client_init(struct s_core * core)
 	s_zoo_sync(g_zoo, ProcessNum, "test2");
 
 	gettimeofday(&gtv, NULL);
-	s_log("[LOG] Sync OK, %d s, %d us", gtv.tv_sec, gtv.tv_usec);
+	s_log("[LOG] Sync OK, %ld s, %ld us", gtv.tv_sec, gtv.tv_usec);
+
+	// access the first data
+	access_data(core);
 
 	return NULL;
 }
+
+void s_ud_client_update(struct s_core * core, void * ud)
+{
+}
+/*
 
 void s_ud_client_update(struct s_core * core, void * ud)
 {
@@ -171,28 +217,34 @@ label_loop:
 	gcount++;
 	goto label_loop;
 }
+*/
 
-static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * ud)
+static void lock_callback(struct s_zoo * z, void * ud,  struct s_zoo_lock_vector * v)
 {
-	struct s_glock_client * c = (struct s_glock_client *)ud;
+	struct s_glock_client * c = ud;
 	struct s_core * core = c->core;
 
-//	s_log("lock free now:%d.%d", c->id.x, c->id.y);
+	s_log("lock free now:%d.%d", c->id.x, c->id.y);
 
 	int sz = s_packet_size_for_id(0);
-	pkt = s_packet_easy(S_PKT_TYPE_WRITE, sz);
+	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_WRITE, sz);
 
 	s_packet_write_int(pkt, c->id.x);
 	s_packet_write_int(pkt, c->id.y);
 
+	int idx = (core->id - 1) * 100 + gcount;
+
+	struct s_array ** pp = s_array_at(g_access_id, idx);
+	struct s_array * D = *pp;
+
 	int i;
-	for(i = 1; i <= 5; ++i) {
-		if(!(c->lock & (1 << i))) {
-			continue;
-		}
-		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_D, i);
+	for(i = 0; i < s_array_len(D); ++i) {
+		int * pd = s_array_at(D, i);
+		int d = *pd;
+
+		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_D, d);
 		if(!serv) {
-		//	s_log("[LOG] lock callback:missing dserv:%d", i);
+			s_log("[LOG] lock callback:missing dserv:%d", d);
 			continue;
 		}
 		s_servg_rpc_call(serv, pkt, c, write_callback, -1);
@@ -203,61 +255,29 @@ static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * 
 
 static void write_callback(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
-	struct s_glock_client * c = (struct s_glock_client *)ud;
-	struct s_core * core = c->core;
+	struct s_glock_client * c = ud;
+//	struct s_core * core = c->core;
 
 	int type = s_servg_get_type(serv);
 	int id = s_servg_get_id(serv);
 
 	assert(type == S_SERV_TYPE_D);
 
-	c->lock &= ~( 1 << id );
+	s_log("write callback now:%d.%d, from:%d, lock:%x", c->id.x, c->id.y, id, c->lock);
 
-//	s_log("write callback now:%d.%d, from:%d, lock:%x", c->id.x, c->id.y, id, c->lock);
+	c->lock &= ~(1 << id);
 
 	if(c->lock == 0) {
-	//	s_log("[LOG] write finished! unlock:%d.%d", c->id.x, c->id.y);
+		s_log("[LOG] write finished! unlock:%d.%d", c->id.x, c->id.y);
 
-		int sz = s_packet_size_for_id(0);
-		pkt = s_packet_easy(S_PKT_TYPE_GLOBAL_UNLOCK, sz);
-		s_packet_write_int(pkt, c->id.x);
-		s_packet_write_int(pkt, c->id.y);
-
-		struct s_server * mserv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_M, 1);
-		if(!mserv) {
-			s_log("[LOG] missing mserv!");
-			return;
-		}
-
-		s_servg_send(mserv, pkt);
-
-		s_packet_drop(pkt);
+		// unlock
+		s_zoo_unlockv(g_zoo, c->v);
 
 		s_free(c);
 
-	//	timersub(&tv, &c->tv, &ret);
-	//	s_log("[LOG] id(%d.%d) time comsume: %lu.%lu", c->id.x, c->id.y, ret.tv_sec, ret.tv_usec);
-
 		struct timeval tv, ret;
 		gettimeofday(&tv, NULL);
-		timersub(&tv, &g_tv_start, &ret);
-	
-		static int C = 0;
-		C++;
-
-		static double lastT = 0;
-		double currT = ret.tv_sec + ret.tv_usec * 1.0f / 1000000;
-
-		s_log("[LOG] Count:%d, total time consume: %f", C, currT - lastT);
-		lastT = currT;
-
-		if(C >= MaxTry) {
-			s_log("[LOG] total time consume: %f", (ret.tv_sec + ret.tv_usec * 1.0f / 1000000));
-		//	s_log("[LOG] start(%ld, %ld), now(%ld, %ld)", 
-		//			g_tv_start.tv_sec, g_tv_start.tv_usec,
-		//			tv.tv_sec, tv.tv_usec);
-		}
-
+		timersub(&tv, &c->tv, &ret);
 	}
 }
 

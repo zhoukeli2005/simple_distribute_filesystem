@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -Wall -I/usr/include/zookeeper/
+CFLAGS = -O0 -g -Wall -I/usr/include/zookeeper/
 LFLAGS = -lpthread -lzookeeper_mt -lrt
 AR = ar
 

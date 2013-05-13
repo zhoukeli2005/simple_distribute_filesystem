@@ -7,6 +7,8 @@
 #include <zookeeper.h>
 #include <zookeeper.jute.h>
 
+#define MAX_FILENAME_LEN	256
+
 struct s_zoo {
 	zhandle_t * zk;
 };
@@ -18,11 +20,22 @@ s_zoo_init(const char * host);
  *	lock
  *
  */
+struct s_zoo_lock_elem;
 
-typedef void(*lock_complete_t)(struct s_zoo * z, void * d, const char * lock_path);
+typedef void(*lock_complete_t)(struct s_zoo * z, void * d, struct s_zoo_lock_elem * e);
+
+struct s_zoo_lock_elem {
+	struct s_zoo * z;
+
+	lock_complete_t callback;
+	void * d;
+
+	char parent_path[MAX_FILENAME_LEN];
+	char lock_path[MAX_FILENAME_LEN];
+};
 
 void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callback, void * d);
-void s_zoo_unlock(struct s_zoo * z, const char * lock_path);
+void s_zoo_unlock(struct s_zoo * z, struct s_zoo_lock_elem * e);
 
 /*
  *	lock vector
@@ -45,7 +58,7 @@ struct s_zoo_lock_vector {
 	lockv_complete_t callback;
 	void * d;
 
-	const char ** lock_path;
+	struct s_zoo_lock_elem ** lock_elems;
 };
 
 struct s_zoo_lock_vector *
