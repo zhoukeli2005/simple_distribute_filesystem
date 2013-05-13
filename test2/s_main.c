@@ -79,10 +79,6 @@ int main(int argc, char * argv[])
 
 	s_log("core create ok, id:%d", id);
 
-	/* 4.2 -- read access_id -- */
-	struct s_array * access_id = s_access_id_create("access_id.conf");
-	return 0;
-
 	/* 5 -- do main process -- */
 	while(1) {
 		/* 1. do servg stuff */

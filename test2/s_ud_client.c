@@ -1,10 +1,13 @@
 #include "s_server.h"
+#include "s_access_id.h"
 
 static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * udata);
 static void write_callback(struct s_server * serv, struct s_packet * pkt, void * udata);
 
 struct s_glock_client {
 	struct s_core * core;
+
+	struct s_zoo * zoo;
 
 	struct s_id id;
 	unsigned int lock;
@@ -13,6 +16,7 @@ struct s_glock_client {
 };
 
 static int MaxTry = 0;
+static int ProcessNum = 0;
 
 static struct timeval gtv;
 static int gid;
@@ -20,6 +24,9 @@ static int ginit = 0;
 static int gcount = 0;
 
 static struct timeval g_tv_start;
+
+static struct s_zoo * g_zoo;
+static struct s_array * g_access_id;
 
 static int irand_serv(int * out)
 {
@@ -47,7 +54,6 @@ static int irand_serv(int * out)
 
 void * s_ud_client_init(struct s_core * core)
 {
-	gettimeofday(&gtv, NULL);
 	gid = 0;
 	ginit = 1;
 
@@ -64,7 +70,30 @@ void * s_ud_client_init(struct s_core * core)
 		exit(0);
 	}
 
-	s_log("[LOG] MaxTry:%d", MaxTry);
+	ProcessNum = s_config_read_i(config, "ProcessNum");
+
+	if(ProcessNum <= 0) {
+		s_log("select config.default.ProcessNum error!");
+		exit(0);
+	}
+
+	s_log("[LOG] MaxTry:%d, ProcessNum:%d", MaxTry, ProcessNum);
+
+	// read access_id
+	g_access_id = s_access_id_create("access_id.conf");
+	if(!g_access_id) {
+		s_log("Read AccessID.conf error!");
+		exit(0);
+	}
+
+	g_zoo = s_zoo_init("127.0.0.1:2181");
+
+	s_log("[LOG] Start Sync ...");
+
+	s_zoo_sync(g_zoo, ProcessNum, "test2");
+
+	gettimeofday(&gtv, NULL);
+	s_log("[LOG] Sync OK, %d s, %d us", gtv.tv_sec, gtv.tv_usec);
 
 	return NULL;
 }

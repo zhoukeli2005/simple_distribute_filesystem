@@ -107,5 +107,7 @@ struct s_array * s_access_id_create(const char * conf)
 
 	dump(D);
 
+	s_file_reader_destroy(fr);
+
 	return D;
 }
