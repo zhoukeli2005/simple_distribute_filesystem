@@ -3,7 +3,7 @@
 CFLAGS += -I../include/
 
 OBJS = s_main.o s_server.o	\
-       s_ud_client.o
+       s_ud_client.o s_access_id.o
 
 LIBS = ../$(LIB)
 

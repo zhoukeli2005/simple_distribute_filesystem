@@ -12,6 +12,7 @@
 #include <s_thread.h>
 #include <s_ipc.h>
 #include <s_server_group.h>
+#include <s_file_reader.h>
 
 void *
 s_ud_client_init(struct s_core * core);

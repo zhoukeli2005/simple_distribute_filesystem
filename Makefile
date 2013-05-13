@@ -36,10 +36,10 @@ all:
 	make -C ./zookeeper
 	ar -r $(LIB) $(OBJS)
 #	make -C ./server
-	make -C ./test
+#	make -C ./test
 #	make -C ./test_cas
 #	make -C ./test_zookeeper
-#	make -C ./test2
+	make -C ./test2
 #	make -C ./test3
 #	make -C ./test_paxos
 
