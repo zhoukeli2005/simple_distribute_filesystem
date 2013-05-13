@@ -11,6 +11,8 @@
 
 struct s_zoo {
 	zhandle_t * zk;
+	int lock_elem_id;
+	struct s_hash * lock_elem_hash;
 };
 
 struct s_zoo *
@@ -32,6 +34,8 @@ struct s_zoo_lock_elem {
 
 	char parent_path[MAX_FILENAME_LEN];
 	char lock_path[MAX_FILENAME_LEN];
+
+	int id;
 };
 
 void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callback, void * d);

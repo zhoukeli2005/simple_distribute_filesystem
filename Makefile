@@ -40,7 +40,7 @@ all:
 #	make -C ./test_cas
 #	make -C ./test_zookeeper
 	make -C ./test2
-#	make -C ./test3
+	make -C ./test3
 #	make -C ./test_paxos
 
 clean:
