@@ -252,7 +252,7 @@ static void lockv_callback(struct s_zoo * z, void * d, struct s_zoo_lock_elem * 
 
 	v->lock_elems[v->curr++] = elem;
 	if(v->curr >= v->count) {
-		printf("get all! callback!\n");
+		printf("[lockv]get all! callback!\n");
 
 		v->callback(z, v->d, v);
 		return;

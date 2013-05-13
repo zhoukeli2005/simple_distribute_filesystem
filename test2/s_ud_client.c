@@ -278,6 +278,8 @@ static void write_callback(struct s_server * serv, struct s_packet * pkt, void *
 		struct timeval tv, ret;
 		gettimeofday(&tv, NULL);
 		timersub(&tv, &c->tv, &ret);
+
+		s_log("[LOG] time comsume : %ld s %ld us", ret.tv_sec, ret.tv_usec);
 	}
 }
 
