@@ -12,6 +12,8 @@ struct s_glock_client {
 	struct s_id id;
 	unsigned int lock;
 
+	int idx;
+
 	struct s_zoo_lock_vector * v;
 
 	struct timeval tv;
@@ -24,6 +26,8 @@ static struct timeval gtv;
 static int gid;
 static int ginit = 0;
 static int gcount = 0;
+
+static struct s_array * g_result;
 
 static struct s_zoo * g_zoo;
 static struct s_array * g_access_id;
@@ -71,13 +75,17 @@ static void access_data(struct s_core * core)
 	c->id.y = gid++;
 	c->v = v;
 	c->lock = 0;
+	c->idx = idx;
+
 	gettimeofday(&c->tv, NULL);
+
+	v->__id = c->id.y;
+	v->__id2 = idx + 1;
 
 	int i;
 	for(i = 0; i < s_array_len(D); ++i) {
 		int * pd = s_array_at(D, i);
 		int d = *pd;
-		s_log("data:%d", d);
 
 		sprintf(buf, "%d", d);
 		
@@ -94,6 +102,8 @@ void * s_ud_client_init(struct s_core * core)
 {
 	gid = 0;
 	ginit = 1;
+
+	g_result = s_array_create(sizeof(struct timeval), 16);
 
 	struct s_config * config = core->create_param.config;
 	if(s_config_select(config, "default") < 0) {
@@ -124,7 +134,7 @@ void * s_ud_client_init(struct s_core * core)
 		exit(0);
 	}
 
-	g_zoo = s_zoo_init("127.0.0.1:2181");
+	g_zoo = s_zoo_init("114.212.143.234:2181");
 
 	s_log("[LOG] Start Sync ...");
 
@@ -134,7 +144,11 @@ void * s_ud_client_init(struct s_core * core)
 	s_log("[LOG] Sync OK, %ld s, %ld us", gtv.tv_sec, gtv.tv_usec);
 
 	// access the first data
-	access_data(core);
+
+	int i;
+	for(i = 0; i < MaxTry; ++i) {
+		access_data(core);
+	}
 
 	return NULL;
 }
@@ -214,17 +228,26 @@ label_loop:
 
 	s_packet_drop(pkt);
 
-	gcount++;
-	goto label_loop;
+gcount++;
+goto label_loop;
 }
 */
 
 static void lock_callback(struct s_zoo * z, void * ud,  struct s_zoo_lock_vector * v)
 {
+	static int C = 0;
+	C++;
+
 	struct s_glock_client * c = ud;
 	struct s_core * core = c->core;
 
-	s_log("lock free now:%d.%d", c->id.x, c->id.y);
+	s_log("Lock:%d.%d, %d", c->id.x, c->id.y, C);
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+
+	struct timeval tv_end;
+	timersub(&tv, &c->tv, &tv_end);
 
 	int sz = s_packet_size_for_id(0);
 	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_WRITE, sz);
@@ -232,19 +255,21 @@ static void lock_callback(struct s_zoo * z, void * ud,  struct s_zoo_lock_vector
 	s_packet_write_int(pkt, c->id.x);
 	s_packet_write_int(pkt, c->id.y);
 
-	int idx = (core->id - 1) * 100 + gcount;
+	int idx = c->idx;
 
 	struct s_array ** pp = s_array_at(g_access_id, idx);
 	struct s_array * D = *pp;
 
 	int i;
-	for(i = 0; i < s_array_len(D); ++i) {
-		int * pd = s_array_at(D, i);
-		int d = *pd;
+	for(i = 1; i < 32; ++i) {
 
-		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_D, d);
+		if((c->lock & (1 << i)) == 0) {
+			continue;
+		}
+
+		struct s_server * serv = s_servg_get_active_serv(core->servg, S_SERV_TYPE_D, i);
 		if(!serv) {
-			s_log("[LOG] lock callback:missing dserv:%d", d);
+			s_log("[LOG] lock callback:missing dserv:%d", i);
 			continue;
 		}
 		s_servg_rpc_call(serv, pkt, c, write_callback, -1);
@@ -256,30 +281,51 @@ static void lock_callback(struct s_zoo * z, void * ud,  struct s_zoo_lock_vector
 static void write_callback(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
 	struct s_glock_client * c = ud;
-//	struct s_core * core = c->core;
+	struct s_core * core = c->core;
 
 	int type = s_servg_get_type(serv);
 	int id = s_servg_get_id(serv);
 
 	assert(type == S_SERV_TYPE_D);
 
-	s_log("write callback now:%d.%d, from:%d, lock:%x", c->id.x, c->id.y, id, c->lock);
-
 	c->lock &= ~(1 << id);
 
 	if(c->lock == 0) {
-		s_log("[LOG] write finished! unlock:%d.%d", c->id.x, c->id.y);
 
 		// unlock
 		s_zoo_unlockv(g_zoo, c->v);
-
-		s_free(c);
 
 		struct timeval tv, ret;
 		gettimeofday(&tv, NULL);
 		timersub(&tv, &c->tv, &ret);
 
-		s_log("[LOG] time comsume : %ld s %ld us", ret.tv_sec, ret.tv_usec);
+		while(s_array_len(g_result) <= c->id.y) {
+			s_array_push(g_result);
+		}
+
+		struct timeval * p = s_array_at(g_result, c->id.y);
+		p->tv_sec = ret.tv_sec;
+		p->tv_usec = ret.tv_usec;
+
+		static int C = 0;
+		C++;
+		if(C >= MaxTry) {
+			// write to file
+			char fname[256];
+			sprintf(fname, "./result.%d", core->id);
+			int file = open(fname, O_RDWR | O_CREAT, 0x777);
+			int i;
+			for(i = 0; i < s_array_len(g_result); ++i) {
+				struct timeval * p = s_array_at(g_result, i); 
+				char buf[1024];
+				sprintf(buf, "%d : %ld s %ld us\n", i+1, p->tv_sec, p->tv_usec);
+				write(file, buf, strlen(buf));
+			}   
+			close(file);
+
+			s_log("All End!");
+
+		}
 	}
 }
 

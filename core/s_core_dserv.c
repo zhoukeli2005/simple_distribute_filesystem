@@ -153,6 +153,8 @@ static void ilock_unlock(struct s_core * core, struct s_core_lock * lock)
 	s_packet_drop(pkt);
 }
 
+static int gfile_2 = 0;
+static struct timeval gtv_2;
 static void ilock_take_done(struct s_core * core, struct s_core_lock * lock)
 {
 	struct s_dserver * dserv = s_core_dserv(core);
@@ -162,6 +164,27 @@ static void ilock_take_done(struct s_core * core, struct s_core_lock * lock)
 
 	// send next
 	int ret = ilock_next(core, lock, lock->pkt);
+
+	if(!gfile_2) {
+		char fname[256];
+		sprintf(fname, "./dresult.%d", core->id);
+		gfile_2 = open(fname, O_RDWR | O_CREAT, 0x777);
+		gettimeofday(&gtv_2, NULL);
+
+		char * p = "0 s 0 us\n";
+		write(gfile_2, p, strlen(p));
+	} else {
+
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+
+		struct timeval tv_end;
+		timersub(&tv, &gtv_2, &tv_end);
+
+		char buf[1024];
+		sprintf(buf, "%ld s %ld us\n", tv_end.tv_sec, tv_end.tv_usec);
+		write(gfile_2, buf, strlen(buf));
+	}
 
 	// write data
 	/*
@@ -230,6 +253,9 @@ label_error:
 	s_log("[Warning] push data error!");
 }
 
+static int gfile = 0;
+static struct timeval gtv;
+
 void s_core_dserv_write(struct s_server * serv, struct s_packet * pkt, void * ud)
 {
 	struct s_core * core = (struct s_core *)ud;
@@ -239,6 +265,27 @@ void s_core_dserv_write(struct s_server * serv, struct s_packet * pkt, void * ud
 	struct s_id data_id;
 	s_packet_read(pkt, &data_id.x, int, label_error);
 	s_packet_read(pkt, &data_id.y, int, label_error);
+
+	if(!gfile) {
+		char fname[256];
+		sprintf(fname, "./dresult.%d", core->id);
+		gfile = open(fname, O_RDWR | O_CREAT, 0x777);
+		gettimeofday(&gtv, NULL);
+
+		char * p = "0 s 0 us\n";
+		write(gfile, p, strlen(p));
+	} else {
+
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+
+		struct timeval tv_end;
+		timersub(&tv, &gtv, &tv_end);
+
+		char buf[1024];
+		sprintf(buf, "%ld s %ld us\n", tv_end.tv_sec, tv_end.tv_usec);
+		write(gfile, buf, strlen(buf));
+	}
 
 //	s_log("[LOG] write, id(%d, %d)", data_id.x, data_id.y);
 

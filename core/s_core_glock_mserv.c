@@ -59,6 +59,7 @@ void s_core_mserv_glock_unlock(struct s_server * serv, struct s_packet * pkt, vo
 
 	struct s_id lock_id;
 	unsigned int lock;
+	s_used(lock);
 
 	s_packet_read(pkt, &lock_id.x, int, label_error);
 	s_packet_read(pkt, &lock_id.y, int, label_error);

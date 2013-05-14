@@ -63,6 +63,11 @@ struct s_zoo_lock_vector {
 	void * d;
 
 	struct s_zoo_lock_elem ** lock_elems;
+
+
+	// debug
+	int __id;
+	int __id2;
 };
 
 struct s_zoo_lock_vector *

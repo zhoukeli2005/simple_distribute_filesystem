@@ -49,6 +49,7 @@ int s_servg_check_list(struct s_server_group * servg)
 		s_packet_drop(pkt);
 	}
 
+/*
 
 	// 2. wait for identify
 
@@ -105,7 +106,7 @@ int s_servg_check_list(struct s_server_group * servg)
 		}
 
 		s_servg_reset_serv(servg, serv);
-	}
+	}*/
 
 	return 0;
 }

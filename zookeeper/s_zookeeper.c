@@ -5,7 +5,7 @@ static void print_error(int e);
 static void print_event(int type, int state, const char * path);
 static int try_lock(struct s_zoo * z, struct s_zoo_lock_elem * elem);
 
-struct s_zoo g_zoo;
+static struct s_zoo g_zoo;
 pthread_mutex_t lock_m;	// for s_zoo_lock
 pthread_mutex_t lockv_m;// for s_zoo_lockv
 pthread_mutex_t sync_m;// for s_zoo_sync
@@ -23,14 +23,14 @@ struct try_lock_elem {
 
 static void try_lock_watcher(zhandle_t * zk, int type, int state, const char * path, void * ctx)
 {
-	printf("try lock watcher!\n");
-	print_event(type, state, path);
-
 	struct try_lock_elem * tle = ctx;
 	struct s_zoo * z = tle->z;
 	struct s_zoo_lock_elem * elem = tle->elem;
 
+	int id = tle->id;
+
 	if(s_hash_get_num(z->lock_elem_hash, tle->id) == NULL) {
+		s_log("[try lock watcher] : no such lock elem:%d", id);
 		return;
 	}
 
@@ -38,6 +38,7 @@ static void try_lock_watcher(zhandle_t * zk, int type, int state, const char * p
 
 	if(!elem->callback) {
 		// already callback
+//		s_log("[try lock watch] : already callback:%d", id);
 		return;
 	}
 
@@ -62,10 +63,10 @@ static int try_lock(struct s_zoo * z, struct s_zoo_lock_elem * elem)
 		print_error(r);
 		return 0;
 	}
-	const char * min_str = 0;
+	const char * min_str = NULL;
 	for(i = 0; i < v.count; ++i) {
 		const char * str = v.data[i];
-		if(!min_str || strcmp(min_str, str) < 0) {
+		if((!min_str) || (strcmp(min_str, str) > 0)) {
 			min_str = str;
 		}
 	}
@@ -73,8 +74,6 @@ static int try_lock(struct s_zoo * z, struct s_zoo_lock_elem * elem)
 	if(min_str && (strcmp(min_str, elem->lock_path) == 0)) {
 		return 1;
 	}
-
-	printf("[try_lock] fail!\n");
 
 	return 0;
 }
@@ -144,10 +143,8 @@ struct s_zoo * s_zoo_init(const char * host)
 
 void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callback, void * d)
 {
-	static char path[MAX_FILENAME_LEN] = {0};
-	static char path_created[MAX_FILENAME_LEN] = {0};
-
-	pthread_mutex_lock(&lock_m);
+	char path[MAX_FILENAME_LEN] = {0};
+	char path_created[MAX_FILENAME_LEN] = {0};
 
 	int fnlen = strlen(filename);
 	int r;
@@ -169,18 +166,25 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 		}
 		memcpy(path + LOCK_ROOT_LEN + 1, filename, fnlen + 1);
 
+		pthread_mutex_lock(&lock_m);
+
 		r = zoo_create(z->zk, path, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, path_created, MAX_FILENAME_LEN);
 		if(r != ZOK && r != ZNODEEXISTS) {
 			printf("[Error]s_zoo_lock, create parent node:%s Error!\n", path);
 			print_error(r);
 			goto label_end;
 		}
+
+		pthread_mutex_unlock(&lock_m);
 	}
 
 
 	// 3. create node "/filename/seq"
 	{
 		path[LOCK_ROOT_LEN + 1 + fnlen] = '/';
+
+		pthread_mutex_lock(&lock_m);
+
 		r = zoo_create(z->zk, path, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL|ZOO_SEQUENCE, path_created, MAX_FILENAME_LEN);
 		if(r != ZOK) {
 			printf("[Error]s_zoo_lock: create lock node:%s Error!\n", path);
@@ -191,11 +195,15 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 		const char * sep = strrchr(path_created, '/');
 		sep++;	// skip '/'
 		memmove(path_created, sep, strlen(sep) + 1);
+
+		pthread_mutex_unlock(&lock_m);
 	}
 
 	// 4. check lock
 	{
 		path[LOCK_ROOT_LEN + 1 + fnlen] = 0;
+
+		pthread_mutex_lock(&lock_m);
 
 		struct s_zoo_lock_elem * elem = s_malloc(struct s_zoo_lock_elem, 1);
 		elem->z = z;
@@ -208,25 +216,18 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 		int * p = s_hash_set_num(z->lock_elem_hash, elem->id);
 		*p = 1;
 
+	//	s_log("[LOG] create elem:%d", elem->id);
+
+		s_log("[wait for] %s", elem->parent_path);
+
 		if(try_lock(z, elem)) {
+			s_log("[got] %s-%s", elem->parent_path, elem->lock_path);
+
 			elem->callback = NULL;
 			pthread_mutex_unlock(&lock_m);
 			callback(z, d, elem);
 			return;
 		}
-		/*
-		if(try_lock(z, elem->parent_path, elem->lock_path)) {
-			// lock ok
-			pthread_mutex_unlock(&lock_m);
-
-			callback(z, d, elem);
-			return;
-		}
-
-		// not lock
-		
-		zoo_wexists(z->zk, elem->parent_path, &lock_watcher, elem, NULL);
-		*/
 	}
 
 label_end:
@@ -237,8 +238,11 @@ void s_zoo_unlock(struct s_zoo * z, struct s_zoo_lock_elem * elem)
 {
 	static char buf[MAX_FILENAME_LEN];
 	snprintf(buf, MAX_FILENAME_LEN - 1, "%s/%s", elem->parent_path, elem->lock_path);
-	printf("unlock:%s,%s(%s)\n", elem->parent_path, elem->lock_path, buf);
 	zoo_delete(z->zk, buf, -1);
+
+	printf("[unlock] %s\n", buf);
+
+//	s_log("[LOG] delete elem:%d", elem->id);
 
 	s_hash_del_num(z->lock_elem_hash, elem->id);
 	s_free(elem);
@@ -289,6 +293,7 @@ void s_zoo_lockv_free(struct s_zoo_lock_vector * v)
 		for(i = 0; i < v->count; ++i) {
 			if(v->lock_elems[i]) {
 				s_free(v->lock_elems[i]);
+				v->lock_elems[i] = NULL;
 			}
 		}
 		s_free(v->lock_elems);
@@ -300,9 +305,14 @@ static void lockv_callback(struct s_zoo * z, void * d, struct s_zoo_lock_elem * 
 {
 	struct s_zoo_lock_vector * v = d;
 
+//	s_log("[DEBUG %d-%d] lockv ok, %s, %s", v->__id, v->__id2, elem->parent_path, elem->lock_path);
+
+	if(!elem) {
+		printf("[Error]lockv callback:elem == NULL!\n");
+	}
+
 	v->lock_elems[v->curr++] = elem;
 	if(v->curr >= v->count) {
-		printf("[lockv]get all! callback!\n");
 
 		v->callback(z, v->d, v);
 		return;
@@ -322,11 +332,11 @@ void s_zoo_lockv(struct s_zoo * z, struct s_zoo_lock_vector * v, lockv_complete_
 		return;
 	}
 
-	pthread_mutex_lock(&lockv_m);
+//	pthread_mutex_lock(&lockv_m);
 
 	v->lock_elems = s_malloc(struct s_zoo_lock_elem *, v->count);
 
-	pthread_mutex_unlock(&lockv_m);
+//	pthread_mutex_unlock(&lockv_m);
 
 	v->curr = 0;
 
@@ -337,9 +347,12 @@ void s_zoo_unlockv(struct s_zoo * z, struct s_zoo_lock_vector * v)
 {
 	int i;
 	for(i = 0; i < v->count; ++i) {
-		printf("[LOG] unlock:%d\n", i);
-		s_zoo_unlock(z, v->lock_elems[i]);
-		v->lock_elems[i] = NULL;
+		if(v->lock_elems[i]) {
+			s_zoo_unlock(z, v->lock_elems[i]);
+			v->lock_elems[i] = NULL;
+		} else {
+			printf("[Error] Miss elem:%d\n", i);
+		}
 	}
 }
 
