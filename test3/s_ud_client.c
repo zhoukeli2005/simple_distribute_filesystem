@@ -309,7 +309,7 @@ static void lock_callback(struct s_server * serv, struct s_packet * pkt, void * 
 		for(i = 0; i < s_array_len(g_result); ++i) {
 			struct timeval * p = s_array_at(g_result, i);
 			char buf[1024];
-			sprintf(buf, "%d : %ld s %ld us\n", i+1, p->tv_sec, p->tv_usec);
+			sprintf(buf, "%ld\n",p->tv_sec * 1000000 + p->tv_usec);
 			write(file, buf, strlen(buf));
 		}
 		close(file);

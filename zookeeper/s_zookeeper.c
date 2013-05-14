@@ -30,7 +30,7 @@ static void try_lock_watcher(zhandle_t * zk, int type, int state, const char * p
 	int id = tle->id;
 
 	if(s_hash_get_num(z->lock_elem_hash, tle->id) == NULL) {
-		s_log("[try lock watcher] : no such lock elem:%d", id);
+	//	s_log("[try lock watcher] : no such lock elem:%d", id);
 		return;
 	}
 
@@ -216,13 +216,7 @@ void s_zoo_lock(struct s_zoo * z, const char * filename, lock_complete_t callbac
 		int * p = s_hash_set_num(z->lock_elem_hash, elem->id);
 		*p = 1;
 
-	//	s_log("[LOG] create elem:%d", elem->id);
-
-		s_log("[wait for] %s", elem->parent_path);
-
 		if(try_lock(z, elem)) {
-			s_log("[got] %s-%s", elem->parent_path, elem->lock_path);
-
 			elem->callback = NULL;
 			pthread_mutex_unlock(&lock_m);
 			callback(z, d, elem);
@@ -239,10 +233,6 @@ void s_zoo_unlock(struct s_zoo * z, struct s_zoo_lock_elem * elem)
 	static char buf[MAX_FILENAME_LEN];
 	snprintf(buf, MAX_FILENAME_LEN - 1, "%s/%s", elem->parent_path, elem->lock_path);
 	zoo_delete(z->zk, buf, -1);
-
-	printf("[unlock] %s\n", buf);
-
-//	s_log("[LOG] delete elem:%d", elem->id);
 
 	s_hash_del_num(z->lock_elem_hash, elem->id);
 	s_free(elem);
@@ -304,8 +294,6 @@ void s_zoo_lockv_free(struct s_zoo_lock_vector * v)
 static void lockv_callback(struct s_zoo * z, void * d, struct s_zoo_lock_elem * elem)
 {
 	struct s_zoo_lock_vector * v = d;
-
-//	s_log("[DEBUG %d-%d] lockv ok, %s, %s", v->__id, v->__id2, elem->parent_path, elem->lock_path);
 
 	if(!elem) {
 		printf("[Error]lockv callback:elem == NULL!\n");

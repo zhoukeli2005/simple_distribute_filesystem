@@ -32,30 +32,6 @@ static struct s_array * g_result;
 static struct s_zoo * g_zoo;
 static struct s_array * g_access_id;
 
-/*
-static int irand_serv(int * out)
-{
-	static int k = 0;
-	static int serv[][5] = { 
-		{1, 2, 3}, 
-		{1, 3, 5}, 
-		{2, 3, 4}, 
-		{3, 4, 5}, 
-		{1, 4, 5}, 
-		{1, 2, 5}, 
-		{0} 
-	};  
-
-	int i = k++;
-		
-	k %= 6;
-	i = 0;
-
-	memcpy(out, serv[i], sizeof(int) * 5); 
-
-	return 3;
-}*/
-
 static void access_data(struct s_core * core)
 {
 	static char buf[256];
@@ -241,14 +217,6 @@ static void lock_callback(struct s_zoo * z, void * ud,  struct s_zoo_lock_vector
 	struct s_glock_client * c = ud;
 	struct s_core * core = c->core;
 
-	s_log("Lock:%d.%d, %d", c->id.x, c->id.y, C);
-
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-
-	struct timeval tv_end;
-	timersub(&tv, &c->tv, &tv_end);
-
 	int sz = s_packet_size_for_id(0);
 	struct s_packet * pkt = s_packet_easy(S_PKT_TYPE_WRITE, sz);
 
@@ -297,7 +265,7 @@ static void write_callback(struct s_server * serv, struct s_packet * pkt, void *
 
 		struct timeval tv, ret;
 		gettimeofday(&tv, NULL);
-		timersub(&tv, &c->tv, &ret);
+		timersub(&tv, &gtv, &ret);
 
 		while(s_array_len(g_result) <= c->id.y) {
 			s_array_push(g_result);
@@ -318,7 +286,7 @@ static void write_callback(struct s_server * serv, struct s_packet * pkt, void *
 			for(i = 0; i < s_array_len(g_result); ++i) {
 				struct timeval * p = s_array_at(g_result, i); 
 				char buf[1024];
-				sprintf(buf, "%d : %ld s %ld us\n", i+1, p->tv_sec, p->tv_usec);
+				sprintf(buf, "%ld\n", p->tv_sec * 1000000 + p->tv_usec);
 				write(file, buf, strlen(buf));
 			}   
 			close(file);

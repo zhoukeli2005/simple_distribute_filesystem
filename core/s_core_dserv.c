@@ -171,7 +171,7 @@ static void ilock_take_done(struct s_core * core, struct s_core_lock * lock)
 		gfile_2 = open(fname, O_RDWR | O_CREAT, 0x777);
 		gettimeofday(&gtv_2, NULL);
 
-		char * p = "0 s 0 us\n";
+		char * p = "0\n";
 		write(gfile_2, p, strlen(p));
 	} else {
 
@@ -182,7 +182,7 @@ static void ilock_take_done(struct s_core * core, struct s_core_lock * lock)
 		timersub(&tv, &gtv_2, &tv_end);
 
 		char buf[1024];
-		sprintf(buf, "%ld s %ld us\n", tv_end.tv_sec, tv_end.tv_usec);
+		sprintf(buf, "%ld\n", tv_end.tv_sec * 1000000 + tv_end.tv_usec);
 		write(gfile_2, buf, strlen(buf));
 	}
 
@@ -272,7 +272,7 @@ void s_core_dserv_write(struct s_server * serv, struct s_packet * pkt, void * ud
 		gfile = open(fname, O_RDWR | O_CREAT, 0x777);
 		gettimeofday(&gtv, NULL);
 
-		char * p = "0 s 0 us\n";
+		char * p = "0\n";
 		write(gfile, p, strlen(p));
 	} else {
 
@@ -283,7 +283,7 @@ void s_core_dserv_write(struct s_server * serv, struct s_packet * pkt, void * ud
 		timersub(&tv, &gtv, &tv_end);
 
 		char buf[1024];
-		sprintf(buf, "%ld s %ld us\n", tv_end.tv_sec, tv_end.tv_usec);
+		sprintf(buf, "%ld\n", tv_end.tv_sec * 1000000 + tv_end.tv_usec);
 		write(gfile, buf, strlen(buf));
 	}
 
